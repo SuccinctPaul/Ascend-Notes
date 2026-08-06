@@ -14,14 +14,20 @@ logging.basicConfig(
 
 def gemm_native(A: np.ndarray, B: np.ndarray) -> np.ndarray:
     """
-    Native gemm function
+    Native GEMM function
+    Theory:Python GEMM = Python MatMul
+
+    MatMul: C= A*B
+
+    GEMM = MatMul + bias + scale + transpose + layout + dtype + epilogue
+        eg: C= 𝛼AB+𝛽𝐶
     
     Args:
         A (np.ndarray): Input matrix A
         B (np.ndarray): Input matrix B
         
     Returns:
-        np.ndarray: Output matrix C = A @ B.T
+        np.ndarray: Output matrix C = A * B
     """
     # Check input shapes
     if A.shape[1] != B.shape[0]:
