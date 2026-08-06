@@ -1,59 +1,23 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.10)
+project(ascend_gemm LANGUAGES C CXX)
 
-include(cmake/prelude.cmake)
+set(CMAKE_CXX_STANDARD 17)
 
-project(
-    ascend_c
-    VERSION 0.1.0
-    DESCRIPTION "Short description"
-    HOMEPAGE_URL "https://example.com/"
-    LANGUAGES CXX
+set(ASCEND_HOME $ENV{ASCEND_HOME_PATH})
+include_directories(${ASCEND_HOME}/include)
+link_directories(${ASCEND_HOME}/lib64)
+
+# Ascend-C kernel 编译
+add_custom_command(
+    OUTPUT gemm_kernel.o
+    COMMAND ascendc --chip=Ascend910B2
+            ${CMAKE_SOURCE_DIR}/op_kernel/gemm_kernel.cpp
+            -o gemm_kernel.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/op_kernel/gemm_kernel.cpp
 )
 
-include(cmake/project-is-top-level.cmake)
-include(cmake/variables.cmake)
+add_custom_target(kernel ALL DEPENDS gemm_kernel.o)
 
-# ---- Declare library ----
-
-add_library(
-    ascend_c_lib OBJECT
-    source/lib.cpp
-)
-
-target_include_directories(
-    ascend_c_lib ${warning_guard}
-    PUBLIC
-    "\$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/source>"
-)
-
-target_compile_features(ascend_c_lib PUBLIC cxx_std_17)
-
-# ---- Declare executable ----
-
-add_executable(ascend_c_exe source/main.cpp)
-add_executable(ascend_c::exe ALIAS ascend_c_exe)
-
-set_property(TARGET ascend_c_exe PROPERTY OUTPUT_NAME ascend_c)
-
-target_compile_features(ascend_c_exe PRIVATE cxx_std_17)
-
-target_link_libraries(ascend_c_exe PRIVATE ascend_c_lib)
-
-# ---- Install rules ----
-
-if(NOT CMAKE_SKIP_INSTALL_RULES)
-  include(cmake/install-rules.cmake)
-endif()
-
-# ---- Developer mode ----
-
-if(NOT ascend_c_DEVELOPER_MODE)
-  return()
-elseif(NOT PROJECT_IS_TOP_LEVEL)
-  message(
-      AUTHOR_WARNING
-      "Developer mode is intended for developers of ascend_c"
-  )
-endif()
-
-include(cmake/dev-mode.cmake)
+# Host 侧
+add_executable(ascend_gemm src/gemm_host.cpp)
+target_link_libraries(ascend_gemm acl ascendcl)
