@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.16.0)
 project(ascend_gemm LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -14,95 +14,47 @@ if(NOT ASCEND_HOME)
         "  source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh")
 endif()
 
-include_directories(${ASCEND_HOME}/include)
-link_directories(${ASCEND_HOME}/lib64)
+# CMAKE_BUILD_TYPE 必须设置: ascendc.cmake 的 merge_device_obj.py 需要 --build-type 参数
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
 
-# ---- 查找 Ascend C kernel 编译器 ----
-# 实测(CANN 9.0.0, aarch64): 此版本没有名为 `ascendc` 的可执行文件,
-# `$ASCEND_HOME/compiler/ascendc` 是一个含 include/ 的目录(符号链接);
-# 真正的 kernel 编译器是 `bisheng` (CANN 的 ASC 编译器前端, 即 bisheng/毕昇),
-# 由 `$ASCEND_HOME/bin/bisheng` 提供 (source set_env.sh 后在 PATH 中).
-# 官方 Ascend-C 构建框架 (ascendc_kernel_cmake) 也是 find_program(... NAMES bisheng ...).
-find_program(ASCENDC_COMPILER
-    NAMES bisheng
-    PATHS
-        ${ASCEND_HOME}/bin
-        ${ASCEND_HOME}/aarch64-linux/ccec_compiler/bin
-        ${ASCEND_HOME}/compiler/ccec_compiler/bin
-    REQUIRED)
-
-# Ascend-C kernel 头文件 (kernel_operator.h 等)。
-# 官方 bisheng_intf.cmake 用一组 asc/include + asc/impl + tikcpp/tikcfw 路径,
-# 这里取其并集以保证 kernel_operator.h / GlobalTensor 等均可解析。
-# 注意: bisheng 的 -I 参数每个路径都要单独带 -I 前缀 (不接受空格分隔的连写),
-# 故用 list(TRANSFORM ... PREPEND "-I") 给每个路径加上 -I。
-set(ASCENDC_DEVKIT ${ASCEND_HOME}/aarch64-linux)
-set(ASCENDC_INCLUDE
-    ${ASCENDC_DEVKIT}/asc/include
-    ${ASCENDC_DEVKIT}/asc/include/basic_api
-    ${ASCENDC_DEVKIT}/asc/impl
-    ${ASCENDC_DEVKIT}/asc/impl/basic_api
-    ${ASCENDC_DEVKIT}/tikcpp/tikcfw)
-list(TRANSFORM ASCENDC_INCLUDE PREPEND "-I")
-
-# ---- 芯片型号 / aicore-arch 标志 (可被 -D 覆盖, 便于在远程调参) ----
+# ---- SoC 型号 (可被 -D 覆盖) ----
 # 远程 NPU: npu-smi 显示 910B2。
-# CANN 9.0.0 的 ascendc.cmake 框架 (legacy_modules/host_config.cmake) 把
-#   ascend910b* 家族 → BUILD_MODE=c220
-# 再由 bisheng_intf.cmake 把 c220 映射到 arch:
-#   - dav-c220-cube: AI Core (含 Cube + Vector, 矩阵乘走这里)
-#   - dav-c220-vec : 纯 Vector Core (AIV)
-# 本 GEMM kernel 跑在 AI Core 上, 故用 dav-c220-cube。
-# 旧的 --cce-soc-version / --cce-soc-core-type 标志在 CANN 9.0.0 上已不接受
-# (报 "soc_core_type: X is not supported for soc_version Ascend910B1")。
-set(ASCEND_AICORE_ARCH "dav-c220-cube" CACHE STRING
-    "bisheng --cce-aicore-arch value (ascend910b2 → dav-c220-cube; ascend310b → dav-m300; ...)")
+# ascendc.cmake 的 host_config.cmake 把 ascend910b* 家族 → BUILD_MODE=c220
+set(SOC_VERSION "Ascend910B2" CACHE STRING
+    "Ascend SoC version (Ascend910B2, Ascend310B1, Ascend310P3, ...)")
+set(ASCEND_CANN_PACKAGE_PATH ${ASCEND_HOME})
 
-# ---- Ascend C kernel 编译 ----
-# --cce-aicore-lang : 把输入当作 ASC (Ascend C) 语言处理 (旧名 --asc-aicore-lang)
-# --cce-aicore-arch : 指定目标 AI Core 微架构 (替代旧的 --cce-soc-version)
-# --cce-aicore-only : 只编 device kernel, 不链接 host stub
-# --cce-auto-sync   : 自动插入必要的同步 (官方框架默认开)
-# --cce-mask-opt    : mask 优化 (cube 模式官方默认开, 这里也带上)
+# ---- 引入官方 Ascend-C 构建框架 (ascendc.cmake) ----
+# ascendc.cmake 提供 ascendc_library() 函数, 它自动完成整套构建+打包流程:
 #
-# 注意: bisheng 在 --cce-aicore-only 模式下不接受 -o (报 "cannot specify -o
-# when generating multiple output files")。它会把 .o 写到 cwd, 文件名带 arch 后缀,
-# 形如 gemm_kernel-cce-hiipu64-hisilicon-cce-dav-c220-cube.o。因此先把输出目录
-# 指向 ${KERNEL_OBJ_DIR}, 编完再用 shell 把唯一那个 .o 移成 gemm_kernel.o。
-set(KERNEL_OBJ_DIR ${CMAKE_BINARY_DIR}/kernel_obj)
-file(MAKE_DIRECTORY ${KERNEL_OBJ_DIR})
-add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/gemm_kernel.o
-    COMMAND ${ASCENDC_COMPILER}
-            --cce-aicore-lang
-            --cce-aicore-arch=${ASCEND_AICORE_ARCH}
-            --cce-aicore-only
-            --cce-auto-sync
-            --cce-mask-opt
-            -std=c++17 -O3
-            ${ASCENDC_INCLUDE}
-            ${CMAKE_SOURCE_DIR}/op_kernel/gemm_kernel.cpp
-            -c
-    COMMAND bash -c "mv ${KERNEL_OBJ_DIR}/gemm_kernel-*.o ${CMAKE_BINARY_DIR}/gemm_kernel.o"
-    WORKING_DIRECTORY ${KERNEL_OBJ_DIR}
-    DEPENDS ${CMAKE_SOURCE_DIR}/op_kernel/gemm_kernel.cpp
-    COMMENT "Compiling Ascend C kernel (bisheng, arch=${ASCEND_AICORE_ARCH})"
-    VERBATIM
-)
-add_custom_target(kernel ALL DEPENDS ${CMAKE_BINARY_DIR}/gemm_kernel.o)
+#   1. bisheng -E 预处理 kernel 源码 → 提取 kernel 函数签名
+#   2. bisheng 编译 device kernel → device_aic.o / device_aiv.o (按 Cube/Vector 分类)
+#   3. extract_host_stub.py 生成 host_stub.cpp (含 device 二进制嵌入 + launch stub)
+#   4. update_host_stub.py 补丁 host_stub.cpp (填充 SoC 专属符号, 如 .ascend.kernel.ascend910b2.gemm)
+#   5. g++ 编译 host_stub.cpp → host_stub.o
+#   6. ascendc_pack_kernel 把 device.o 合并进 host_stub.o → 可被 ACL 运行时识别的二进制
+#   7. ar 打包 → lib/libgemm.a
+#
+# 最终 libgemm.a 导出: aclrtlaunch_gemm_kernel(numBlocks, stream, a, b, c, workspace, tiling)
+# —— host 侧只需调用此函数即可启动 kernel, 无需手动 aclrtBinaryLoadFromFile 等。
+#
+# 路径: $ASCEND_HOME/aarch64-linux/tikcpp/ascendc_kernel_cmake/ascendc.cmake
+include(${ASCEND_HOME}/aarch64-linux/tikcpp/ascendc_kernel_cmake/ascendc.cmake)
+
+# ---- 构建 kernel 静态库 ----
+# 必须用 STATIC 而非 OBJECT:
+#   - STATIC: 经过 link 步骤, 触发 PRE_LINK 阶段的 ascendc_pack_kernel 打包
+#   - OBJECT: 不经过 link, pack 步骤不会执行 (产出无法被 ACL 运行时加载)
+ascendc_library(gemm STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gemm_kernel.cpp)
 
 # ---- host 侧可执行文件 ----
-# aarch64 GCC 原生支持 __fp16; -fno-fast-math 避免过度优化影响精度校验
-# 依赖 kernel target: 确保 ./ascend_gemm 运行前 gemm_kernel.o 已编出 (host 默认从 cwd 加载它)
-# 链接库:
-#   ascendcl : ACL 主库 (aclInit / aclrtMalloc / aclrtBinaryLoadFromFile /
-#              aclrtLaunchKernelWithConfig / aclrtGetSocName 等)
-#   runtime  : 底层 rt 库 (rtGetC2cCtrlAddr, 910B cube kernel 的 FFTS 地址查询)
-# 注: 本版本没有独立的 libacl.so, ACL 全部入口都在 libascendcl.so 里。
+# 链接 gemm (内含 aclrtlaunch_gemm_kernel + 打包好的 device 二进制)
+#   ascendcl : ACL 主库 (aclInit / aclrtMalloc / aclrtMemcpy / aclrtSynchronizeStream 等)
+#   runtime  : 底层 rt 库 (LaunchAscendKernel 等运行时符号)
 add_executable(ascend_gemm src/gemm_host.cpp)
-add_dependencies(ascend_gemm kernel)
 target_compile_options(ascend_gemm PRIVATE -fno-fast-math)
-target_link_libraries(ascend_gemm ascendcl runtime)
+target_link_libraries(ascend_gemm PRIVATE gemm ascendcl runtime)
 
-# 默认从 build 目录运行: gemm_kernel.o 与 ascend_gemm 同在 ${CMAKE_BINARY_DIR}
-# 运行: cd build && ./ascend_gemm   (或 ./ascend_gemm /path/to/gemm_kernel.o)
+# 运行: cd build && ./ascend_gemm
