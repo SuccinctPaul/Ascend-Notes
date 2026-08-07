@@ -31,36 +31,50 @@ find_program(ASCENDC_COMPILER
         ${ASCEND_HOME}/compiler/ccec_compiler/bin
     REQUIRED)
 
-# Ascend-C kernel 头文件 (kernel_operator.h 等): 在 aarch64-linux/ascendc/include
-set(ASCENDC_INCLUDE ${ASCEND_HOME}/aarch64-linux/ascendc/include)
+# Ascend-C kernel 头文件 (kernel_operator.h 等)。
+# 官方 bisheng_intf.cmake 用一组 asc/include + asc/impl + tikcpp/tikcfw 路径,
+# 这里取其并集以保证 kernel_operator.h / GlobalTensor 等均可解析。
+set(ASCENDC_DEVKIT ${ASCEND_HOME}/aarch64-linux)
+set(ASCENDC_INCLUDE
+    ${ASCENDC_DEVKIT}/asc/include
+    ${ASCENDC_DEVKIT}/asc/include/basic_api
+    ${ASCENDC_DEVKIT}/asc/impl
+    ${ASCENDC_DEVKIT}/asc/impl/basic_api
+    ${ASCENDC_DEVKIT}/tikcpp/tikcfw)
 
-# ---- 芯片型号 / soc 标志 (可被 -D 覆盖, 便于在远程调参) ----
-# 远程 NPU: npu-smi 显示 910B2; CANN 的 SOC_MAP_EXT 把 ascend910b 家族映射到 soc_version=Ascend910B1.
-# bisheng 接受:  --cce-soc-version=<soc>  与  --cce-soc-core-type=<core>
-# 实测 910B1/B2 上, 直接给 --cce-soc-core-type=AiCore/AICore/MIX/... 均被拒
-# (报 "soc_core_type: X is not supported for soc_version Ascend910B1"),
-# 正确的 core_type 组合需在远程用官方 ascendc.cmake 框架确认 (见 README "构建状态").
-# 因此这里把 soc_version / soc_core_type 暴露为 cache 变量, 默认只传 soc_version.
-set(ASCEND_SOC_VERSION "Ascend910B1" CACHE STRING "bisheng --cce-soc-version value (910B family = Ascend910B1)")
-set(ASCEND_SOC_CORE_TYPE "" CACHE STRING "bisheng --cce-soc-core-type value (empty=不传, 待远程确认)")
+# ---- 芯片型号 / aicore-arch 标志 (可被 -D 覆盖, 便于在远程调参) ----
+# 远程 NPU: npu-smi 显示 910B2。
+# CANN 9.0.0 的 ascendc.cmake 框架 (legacy_modules/host_config.cmake) 把
+#   ascend910b* 家族 → BUILD_MODE=c220
+# 再由 bisheng_intf.cmake 把 c220 映射到 arch:
+#   - dav-c220-cube: AI Core (含 Cube + Vector, 矩阵乘走这里)
+#   - dav-c220-vec : 纯 Vector Core (AIV)
+# 本 GEMM kernel 跑在 AI Core 上, 故用 dav-c220-cube。
+# 旧的 --cce-soc-version / --cce-soc-core-type 标志在 CANN 9.0.0 上已不接受
+# (报 "soc_core_type: X is not supported for soc_version Ascend910B1")。
+set(ASCEND_AICORE_ARCH "dav-c220-cube" CACHE STRING
+    "bisheng --cce-aicore-arch value (ascend910b2 → dav-c220-cube; ascend310b → dav-m300; ...)")
 
 # ---- Ascend C kernel 编译 ----
-# --asc-aicore-lang: 把输入当作 ASC (Ascend C) 语言处理 (官方框架的写法)
-# --cce-soc-version: 指定目标芯片 (soc_version)
-# (可选) --cce-soc-core-type: 指定核类型, 当前留空 —— 见上方注释
-set(_SOC_FLAGS --asc-aicore-lang --cce-soc-version=${ASCEND_SOC_VERSION})
-if(ASCEND_SOC_CORE_TYPE)
-    list(APPEND _SOC_FLAGS --cce-soc-core-type=${ASCEND_SOC_CORE_TYPE})
-endif()
-
+# --cce-aicore-lang : 把输入当作 ASC (Ascend C) 语言处理 (旧名 --asc-aicore-lang)
+# --cce-aicore-arch : 指定目标 AI Core 微架构 (替代旧的 --cce-soc-version)
+# --cce-aicore-only : 只编 device kernel, 不链接 host stub
+# --cce-auto-sync   : 自动插入必要的同步 (官方框架默认开)
+# --cce-mask-opt    : mask 优化 (cube 模式官方默认开, 这里也带上)
 add_custom_command(
     OUTPUT gemm_kernel.o
-    COMMAND ${ASCENDC_COMPILER} ${_SOC_FLAGS}
-            -I${ASCENDC_INCLUDE}
+    COMMAND ${ASCENDC_COMPILER}
+            --cce-aicore-lang
+            --cce-aicore-arch=${ASCEND_AICORE_ARCH}
+            --cce-aicore-only
+            --cce-auto-sync
+            --cce-mask-opt
+            -std=c++17 -O3
+            ${ASCENDC_INCLUDE}
             ${CMAKE_SOURCE_DIR}/op_kernel/gemm_kernel.cpp
             -c -o gemm_kernel.o
     DEPENDS ${CMAKE_SOURCE_DIR}/op_kernel/gemm_kernel.cpp
-    COMMENT "Compiling Ascend C kernel (bisheng, soc=${ASCEND_SOC_VERSION}${ASCEND_SOC_CORE_TYPE})"
+    COMMENT "Compiling Ascend C kernel (bisheng, arch=${ASCEND_AICORE_ARCH})"
     VERBATIM
 )
 add_custom_target(kernel ALL DEPENDS gemm_kernel.o)

@@ -29,8 +29,11 @@ void gemm_kernel(GM_ADDR a, GM_ADDR b, GM_ADDR c,
                  GM_ADDR workspace, GM_ADDR tiling)
 {
     // ---- 1. 解析 host 下发的 tiling 参数 ----
-    // tiling 是一段 device 可见的内存, host 端写入 M/K/N 三个 uint32
-    uint32_t* t = reinterpret_cast<uint32_t*>(tiling);
+    // tiling 是一段 device 可见的 GM (全局内存), host 端写入 M/K/N 三个 uint32。
+    // 注意: tiling 入参类型是 __gm__ uint8_t*, 必须用 __gm__ 修饰符 cast 到
+    // __gm__ uint32_t* —— 否则 bisheng 会拒绝跨地址空间的 reinterpret_cast
+    // (GM 地址空间 → 私有地址空间不合法)。
+    __gm__ uint32_t* t = reinterpret_cast<__gm__ uint32_t*>(tiling);
     uint32_t M = t[0];  // A 的行数 / C 的行数
     uint32_t K = t[1];  // A 的列数 / B 的行数
     uint32_t N = t[2];  // B 的列数 / C 的列数
