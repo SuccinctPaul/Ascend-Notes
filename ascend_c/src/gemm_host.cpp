@@ -97,15 +97,15 @@ int main(int argc, char** argv) {
     CHECK_ACL(aclrtMalloc(&d_B, K * N * sizeof(half_t), ACL_MEM_MALLOC_NORMAL_ONLY), "aclrtMalloc B");
     CHECK_ACL(aclrtMalloc(&d_C, M * N * sizeof(half_t), ACL_MEM_MALLOC_NORMAL_ONLY), "aclrtMalloc C");
 
-    CHECK_ACL(aclrtMemcpy(d_A, h_A.data(), M * K * sizeof(half_t), ACL_MEMCPY_HOST_TO_DEVICE), "H2D A");
-    CHECK_ACL(aclrtMemcpy(d_B, h_B.data(), K * N * sizeof(half_t), ACL_MEMCPY_HOST_TO_DEVICE), "H2D B");
+    CHECK_ACL(aclrtMemcpy(d_A, M * K * sizeof(half_t), h_A.data(), M * K * sizeof(half_t), ACL_MEMCPY_HOST_TO_DEVICE), "H2D A");
+    CHECK_ACL(aclrtMemcpy(d_B, K * N * sizeof(half_t), h_B.data(), K * N * sizeof(half_t), ACL_MEMCPY_HOST_TO_DEVICE), "H2D B");
 
     // ---- 4. 下发 tiling (M, K, N) ----
     // tiling 是一段 device 可见内存, kernel 通过第 5 个参数读取
     uint32_t tiling[3] = {uint32_t(M), uint32_t(K), uint32_t(N)};
     void* d_tiling = nullptr;
     CHECK_ACL(aclrtMalloc(&d_tiling, sizeof(tiling), ACL_MEM_MALLOC_NORMAL_ONLY), "aclrtMalloc tiling");
-    CHECK_ACL(aclrtMemcpy(d_tiling, tiling, sizeof(tiling), ACL_MEMCPY_HOST_TO_DEVICE), "H2D tiling");
+    CHECK_ACL(aclrtMemcpy(d_tiling, sizeof(tiling), tiling, sizeof(tiling), ACL_MEMCPY_HOST_TO_DEVICE), "H2D tiling");
 
     // ---- 5. 加载 kernel 二进制并取得 funcHandle ----
     // aclrtBinaryLoadFromFile: 把 .o 注册到 device runtime, 返回 binHandle
@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
     CHECK_ACL(aclrtSynchronizeStream(stream), "aclrtSynchronizeStream");
 
     // ---- 8. D2H 取回结果 ----
-    CHECK_ACL(aclrtMemcpy(h_C.data(), d_C, M * N * sizeof(half_t), ACL_MEMCPY_DEVICE_TO_HOST),
+    CHECK_ACL(aclrtMemcpy(h_C.data(), M * N * sizeof(half_t), d_C, M * N * sizeof(half_t), ACL_MEMCPY_DEVICE_TO_HOST),
               "D2H C");
 
     // ---- 9. CPU 参考计算 + 误差校验 ----
