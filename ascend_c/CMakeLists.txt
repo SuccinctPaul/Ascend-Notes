@@ -34,6 +34,8 @@ find_program(ASCENDC_COMPILER
 # Ascend-C kernel 头文件 (kernel_operator.h 等)。
 # 官方 bisheng_intf.cmake 用一组 asc/include + asc/impl + tikcpp/tikcfw 路径,
 # 这里取其并集以保证 kernel_operator.h / GlobalTensor 等均可解析。
+# 注意: bisheng 的 -I 参数每个路径都要单独带 -I 前缀 (不接受空格分隔的连写),
+# 故用 list(TRANSFORM ... PREPEND "-I") 给每个路径加上 -I。
 set(ASCENDC_DEVKIT ${ASCEND_HOME}/aarch64-linux)
 set(ASCENDC_INCLUDE
     ${ASCENDC_DEVKIT}/asc/include
@@ -41,6 +43,7 @@ set(ASCENDC_INCLUDE
     ${ASCENDC_DEVKIT}/asc/impl
     ${ASCENDC_DEVKIT}/asc/impl/basic_api
     ${ASCENDC_DEVKIT}/tikcpp/tikcfw)
+list(TRANSFORM ASCENDC_INCLUDE PREPEND "-I")
 
 # ---- 芯片型号 / aicore-arch 标志 (可被 -D 覆盖, 便于在远程调参) ----
 # 远程 NPU: npu-smi 显示 910B2。
