@@ -112,8 +112,20 @@ int main(int argc, char** argv) {
     // aclrtBinaryGetFunctionByEntry: 按 tilingKey 取函数句柄
     //   - tilingKey 是 host 下发的"tiling 方案编号", 用于让同一 kernel 源码支持多种分块
     //   - 本朴素 kernel 不分块, tilingKey=0 (对应 bisheng_intf.cmake 里的 TILING_KEY_VAR=0)
+    //
+    // magic 选项: bisheng 直接编出的 raw .o 没有运行时识别用的 magic header
+    // (官方框架用 ascendc_pack_kernel 打包后会加 magic)。我们通过 BinaryLoadOptions
+    // 显式告诉 runtime 这是 AICORE ELF (ACL_RT_BINARY_MAGIC_ELF_AICORE=0x43554245,
+    // 即 ASCII "CUBE"), 省去 pack 步骤。
     aclrtBinHandle binHandle = nullptr;
-    CHECK_ACL(aclrtBinaryLoadFromFile(kernel_path.c_str(), nullptr, &binHandle), "aclrtBinaryLoadFromFile");
+    aclrtBinaryLoadOption opt;
+    std::memset(&opt, 0, sizeof(opt));
+    opt.type = ACL_RT_BINARY_LOAD_OPT_MAGIC;
+    opt.value.magic = 0x43554245U;  // ACL_RT_BINARY_MAGIC_ELF_AICORE
+    aclrtBinaryLoadOptions opts;
+    opts.options = &opt;
+    opts.numOpt = 1;
+    CHECK_ACL(aclrtBinaryLoadFromFile(kernel_path.c_str(), &opts, &binHandle), "aclrtBinaryLoadFromFile");
 
     aclrtFuncHandle funcHandle = nullptr;
     const uint64_t tilingKey = 0;
