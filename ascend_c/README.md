@@ -15,45 +15,56 @@ Ascend C 是华为 CANN 提供的**底层 kernel 编程 DSL**:用 C++ 写算子,
 ## 工具链
 
 ```
-gemm_kernel.cpp  ──[bisheng 编译器]──►  gemm_kernel.o  (device 机器码)
-                                                │
-gemm_host.cpp  ──[g++ + ACL]──►  ascend_gemm  (host 可执行)
-                                                │
-                        运行: aclrtLaunchKernel("gemm_kernel", ...)
-                                                │
-                        NPU AI Core 执行 ──►  结果回传 host 校验
+gemm_kernel.cpp  ──[ascendc.cmake 框架]──►  libgemm.a  (含 device 二进制 + host launch stub)
+       │                    │                         │
+       │ bisheng 编译       │ ascendc_pack_kernel     │ g++ 链接
+       │ device kernel      │ 打包                    │
+       ▼                    ▼                         ▼
+   device_aiv.o  ──────────►  host_stub.o  ◄──── gemm_host.cpp
+                                                        │
+                                          ascend_gemm (host 可执行)
+                                                        │
+                                  运行: aclrtlaunch_gemm_kernel(1, stream, ...)
+                                                        │
+                                  NPU AI Core 执行 ──►  结果回传 host 校验
 ```
 
+- **ascendc.cmake 框架**:CANN 官方 Ascend-C 构建系统,路径
+  `$ASCEND_HOME_PATH/aarch64-linux/tikcpp/ascendc_kernel_cmake/ascendc.cmake`。
+  提供 `ascendc_library()` 函数,自动完成 bisheng 编译 → host stub 生成 → 打包全流程。
 - **bisheng(毕昇)编译器**:CANN 的 ASC 编译器前端,把 C++ kernel 源码编成 device `.o`。
   在本机(CANN 9.0.0, aarch64)由 `$ASCEND_HOME_PATH/bin/bisheng` 提供(source `set_env.sh` 后在 PATH 中)。
-  > 注:老文档里常写的 `ascendc` 可执行在本版本里**不存在**——`$ASCEND_HOME/compiler/ascendc` 只是个含 `include/` 的目录;
-  > 官方 Ascend-C 构建框架(`ascendc_kernel_cmake`)内部 `find_program(... NAMES bisheng ...)`,用的也是 bisheng。
-- **ACL**(Ascend Computing Language):host 侧运行时库,提供 `aclrtMalloc`/`aclrtMemcpy`/`aclrtLaunchKernel`
-  等接口(类比 CUDA Runtime 的 `cudaMalloc`/`cudaMemcpy`/`cudaLaunchKernel`)。
-- **CANN**:整套软件栈,提供头文件 `acl/acl.h` 与库 `libascendcl.so`/`libacl.so`。
+- **ACL**(Ascend Computing Language):host 侧运行时库,提供 `aclrtMalloc`/`aclrtMemcpy` 等
+  接口(类比 CUDA Runtime 的 `cudaMalloc`/`cudaMemcpy`)。
+- **CANN**:整套软件栈,提供头文件 `acl/acl.h` 与库 `libascendcl.so`。
 
 ### 构建状态(2026-08-07 实测)
 
 - 远程 NPU:`npu-smi` 显示 **910B2**(多卡),CANN 9.0.0,`bisheng` 可用。
 - ✅ **kernel 源码 + 注释完整**,可直接学习 Ascend C 的写法。
-- ✅ **kernel 编译跑通**:`bisheng --cce-aicore-arch=dav-c220-cube` 成功编出 `gemm_kernel.o`(ELF arch 0x1029 = Ascend AICore)。算法与 `python/` 基准同源(朴素三重循环 + fp32 累加),逻辑正确。
-- ⚠️ **host 端运行 NPU kernel 需官方 pack 流程**: `aclrtBinaryLoadFromFile` 不能直接加载 bisheng 编出的 raw `.o`(报 `107000 ACL_ERROR_RT_PARAM_INVALID`)。raw `.o` 需先用 `ascendc_pack_kernel` 打包(它会把 `.aicore_binary` 等 section 加上运行时识别用的 magic header),而 pack 又需要一个由 `update_host_stub.py` 生成的 `device_aic.o` stub —— 这套流程由官方 `ascendc.cmake` 框架自动完成(见下节"官方框架路径")。
-- 本目录的 `src/gemm_host.cpp` 展示了**现代 ACL kernel launch API 的完整写法**(`aclrtBinaryLoadFromFile → aclrtBinaryGetFunctionByEntry → aclrtKernelArgsInit/Append/Finalize → aclrtLaunchKernelWithConfig`,含 910B cube 的 FFTS prepend),教学价值完整;只是缺 pack 步骤,直接跑会卡在 load。
-- **关键标志组合**(CANN 9.0.0 新方案,旧的 `--cce-soc-version`/`--cce-soc-core-type` 已废弃):
-  ```
-  bisheng --cce-aicore-lang --cce-aicore-arch=dav-c220-cube \
-          --cce-aicore-only --cce-auto-sync --cce-mask-opt \
-          -std=c++17 -O3 -I<asc/include ...>  gemm_kernel.cpp -c -o gemm_kernel.o
-  ```
-  - `--cce-aicore-arch=dav-c220-cube`:**ascend910b** 家族对应的 AI Core 微架构
-    (CANN `ascendc.cmake` 框架的 `legacy_modules/host_config.cmake` 把 `ascend910b*` 映射到 `BUILD_MODE=c220`,
-    再由 `bisheng_intf.cmake` 把 `c220` 映射到 `dav-c220-cube`(AI Core,含 Cube+Vector)/ `dav-c220-vec`(纯 Vector Core)。
-    本 GEMM 走 AI Core,故用 `cube` 变体)。
-  - `--cce-aicore-only`:只编 device kernel,不生成 host stub(教学简化;若要直接 run,去掉此 flag 让 bisheng 顺带生成 host stub,再走官方 pack)。
-  - 其它芯片:`ascend310b*` → `dav-m300`,`ascend310p*` → `dav-m200`,`ascend910a` → `dav-c100`(详见 `host_config.cmake`)。
-- 旧的 `--cce-soc-version=Ascend910B1` + `--cce-soc-core-type=...` 标志在本版本上**已不接受**
-  (报 `soc_core_type: X is not supported for soc_version Ascend910B1`),不要再用。
-- CMakeLists 已把 `ASCEND_AICORE_ARCH` 暴露为 cache 变量,远程可用 `-DASCEND_AICORE_ARCH=...` 覆盖。
+- ✅ **kernel 编译 + 打包 + host 运行全部跑通**:用官方 `ascendc.cmake` 框架 (`ascendc_library STATIC`)
+  自动完成 bisheng 编译 → host stub 生成 → `ascendc_pack_kernel` 打包 → `libgemm.a`。
+- ✅ **NPU 正确性 PASS**:`./ascend_gemm` 输出 `ascend_c GEMM: PASS (max_abs_error=0, M=N=K=128, dtype=fp16)`。
+  算法与 `python/` 基准同源(朴素三重循环 + fp32 累加)。
+
+### 构建原理:为什么需要 ascendc.cmake 框架
+
+bisheng 直接编出的 raw `.o` 缺运行时 magic header,`aclrtBinaryLoadFromFile` 直接加载会报 `107000 ACL_ERROR_RT_PARAM_INVALID`。
+官方 `ascendc.cmake` 框架自动完成整套打包流程:
+
+1. bisheng `-E` 预处理 kernel → 提取函数签名 → 生成 `host_stub.cpp`
+2. bisheng 编译 device kernel → `device_aiv.o` (Vector 核心)
+3. `update_host_stub.py` 补丁 `host_stub.cpp` (填充 SoC 专属符号)
+4. g++ 编译 `host_stub.cpp` → `host_stub.o`
+5. `ascendc_pack_kernel` 把 `device_aiv.o` 合并进 `host_stub.o` → 可被 ACL 运行时加载的二进制
+6. `ar` 打包 → `lib/libgemm.a` (导出 `aclrtlaunch_gemm_kernel()`)
+
+最终 host 只需调用 `aclrtlaunch_gemm_kernel(1, stream, d_A, d_B, d_C, nullptr, d_tiling)` 即可启动 kernel,
+类比 CUDA 的 `kernel<<<grid,block>>>(...)` launch stub。
+
+> SoC → BUILD_MODE → aicore-arch 映射 (CANN `host_config.cmake`):
+> `ascend910b*` → `c220` → `dav-c220-cube`; `ascend310b*` → `m300`; `ascend310p*` → `m200`。
+> 旧的 `--cce-soc-version` / `--cce-soc-core-type` 在 CANN 9.0.0 已废弃。
 
 ## NPU 硬件概念(理解 kernel 注释所需)
 
@@ -81,68 +92,44 @@ gemm_host.cpp  ──[g++ + ACL]──►  ascend_gemm  (host 可执行)
 # 1. 加载 CANN 环境 (必须, 否则 ASCEND_HOME_PATH / bisheng 找不到)
 source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 
-# 2. 构建 (host 可执行 + 编 kernel.o)
+# 2. 构建 (ascendc.cmake 自动: 编 kernel + 打包 + 编 host)
 cd ascend_c
-cmake -S . -B build
-cmake --build build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
 
-# 3. 运行 host (注意: 直接 run 当前卡在 kernel 二进制 load, 见"构建状态")
-#    - host 能编出, 但 aclrtBinaryLoadFromFile 加载 raw .o 报 107000
-#    - 要跑通 run, 需走下方"官方框架路径"做 pack + host stub
+# 3. 运行 host → NPU 执行 kernel → 正确性校验
 cd build && ./ascend_gemm
-# 或指定 kernel 路径: ./ascend_gemm /path/to/gemm_kernel.o
 ```
 
-**验证 kernel 编译成功**(不需要 run host):
-```bash
-# 编出 .o 即算 kernel 正确性 (算法逻辑与 python/ 基准同源, 已对齐)
-ls -la build/gemm_kernel.o   # 应为 ~34KB ELF, arch 0x1029 (Ascend AICore)
-file build/gemm_kernel.o
+预期输出:
+```
+ascend_c GEMM: PASS (max_abs_error=0, M=N=K=128, dtype=fp16)
 ```
 
-若 `bisheng` 编 kernel 时报 arch 不支持,可用 cache 变量覆盖:
+若芯片型号不同,可用 cache 变量覆盖:
 ```bash
-cmake -S . -B build -DASCEND_AICORE_ARCH=dav-c220-cube   # ascend910b2 默认值
+cmake -S . -B build -DSOC_VERSION=Ascend910B2   # 默认值
 # 其它芯片示例:
-#   ascend310b:  -DASCEND_AICORE_ARCH=dav-m300
-#   ascend310p: -DASCEND_AICORE_ARCH=dav-m200
+#   -DSOC_VERSION=Ascend310B1
+#   -DSOC_VERSION=Ascend310P3
 ```
 
-预期输出(kernel 编译成功):
-```
-[ 33%] Compiling Ascend C kernel (bisheng, arch=dav-c220-cube)
-[ 33%] Built target kernel
-[ 66%] Building CXX object ...ascend_gemm.cpp.o
-[100%] Linking CXX executable ascend_gemm
-$ file build/gemm_kernel.o
-build/gemm_kernel.o: ELF 64-bit LSB relocatable, *unknown arch 0x1029*, ...  # 0x1029 = Ascend AICore
-```
-
-(host run 当前因 raw .o 未 pack 会报 `aclrtBinaryLoadFromFile error=107000`,需官方框架 pack 后才能跑通,见"官方框架路径"。)
-
-### 官方框架路径(若直调 bisheng 不通)
-
-CANN 自带 Ascend-C op-project 框架,路径:
-`$ASCEND_HOME_PATH/aarch64-linux/tikcpp/ascendc_kernel_cmake/`,入口 `ascendc.cmake`。
-它内部用 `find_program(NAMES bisheng)` + 按 target 自动构造 soc 标志,是官方推荐写法。
-模板在 `$ASCEND_HOME_PATH/tools/op_project_templates/ascendc/`。
-本目录为**教学简化版**(直接 bisheng + 自写 ACL host),突出 kernel 写法本身;
-若需移植到官方框架,按上述模板的 `op_kernel/` + `op_host/` + `op_proto/` 结构组织即可。
+> **注意**:`CMAKE_BUILD_TYPE` 必须设置 (Release/Debug),`ascendc.cmake` 的 merge 步骤需要它。
+> CMakeLists.txt 已设默认值 Release,手动传 `-DCMAKE_BUILD_TYPE=...` 可覆盖。
 
 ## 文件说明
 
 | 文件 | 作用 |
 |---|---|
 | `op_kernel/gemm_kernel.cpp` | Ascend C kernel:朴素三重循环,fp16+fp32 累加,详细注释 |
-| `src/gemm_host.cpp` | host 驱动:ACL 初始化、H2D/D2H、kernel 启动、CPU 参考+校验 |
-| `CMakeLists.txt` | 构建:find bisheng → 编 kernel.o,g++ 编 host;aicore-arch 可调 |
+| `src/gemm_host.cpp` | host 驱动:ACL 初始化、H2D/D2H、调 `aclrtlaunch_gemm_kernel`、CPU 参考+校验 |
+| `CMakeLists.txt` | 构建:引 `ascendc.cmake` → `ascendc_library STATIC` 自动编+打包 kernel,g++ 编 host |
 
 ## 常见问题
 
 - **`ASCEND_HOME_PATH 未设置`**:没 source `set_env.sh`,或在本 shell 重新 source。
-- **`bisheng: error: soc_core_type ... is not supported`**:用了旧的 `--cce-soc-version`/`--cce-soc-core-type` 标志(CANN 9.0.0 已废弃)。改用 `--cce-aicore-arch=dav-c220-cube`(见上方"构建状态"),或 `-DASCEND_AICORE_ARCH=...` 覆盖。
-- **`bisheng: error: Unsupported CCE architecture`**:`--cce-aicore-arch` 值与芯片不匹配。910B 家族用 `dav-c220-cube`,310B 用 `dav-m300`,310P 用 `dav-m200`(完整映射见 CANN `legacy_modules/host_config.cmake`)。
-- **`fatal error: 'kernel_operator.h' file not found`**:include 路径不全。CMakeLists 已加 `asc/include`、`asc/impl`、`tikcpp/tikcfw` 等路径;手写命令需全部带上。
+- **`SOC_VERSION does not support`**:`-DSOC_VERSION` 值不在支持列表。910B 家族用 `Ascend910B2`(完整列表见 CANN `host_config.cmake` 的 `ascend910b_list`)。
+- **`merge_device_obj.py: error: argument --build-type`**:`CMAKE_BUILD_TYPE` 未设。CMakeLists 已设默认 Release;若手动 cmake 不传则需加 `-DCMAKE_BUILD_TYPE=Release`。
 - **`fatal error: 'acl/acl.h' file not found`**:CANN include 路径未配置,确认 `set_env.sh` 已 source。
 - **`reinterpret_cast from '__gm__ uint8_t *' to 'uint32_t *' is not allowed`**:GM 指针不能直接 cast 到私有指针,需保留 `__gm__` 修饰符(`__gm__ uint32_t*`)。
 - **精度误差大**:确认累加器是 `float` 而非 `half`;朴素版逐元素读 GM 慢属正常现象。

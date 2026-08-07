@@ -8,7 +8,7 @@
 | 目录 | DSL | 语言 | 抽象层级 | 工具链 | 说明 |
 |---|---|---|---|---|---|
 | [`python/`](python/) | NumPy | Python | 最高 (无 NPU) | numpy + uv | **正确性基准 (ground truth)**, CPU 参考实现 |
-| [`ascend_c/`](ascend_c/) | Ascend C | C++ | 最低 | CANN `bisheng` 编译器 + ACL | CANN 原生 kernel, 直接操作硬件资源 (kernel 编译验证, host run 见其 README) |
+| [`ascend_c/`](ascend_c/) | Ascend C | C++ | 最低 | CANN `ascendc.cmake` + `bisheng` + ACL | CANN 原生 kernel, 直接操作硬件资源 |
 | [`triton_ascend/`](triton_ascend/) | Triton | Python (`@triton.jit`) | 中 (块级) | triton-ascend 后端 + torch_npu | OpenAI Triton 的昇腾后端, `tl.dot`→Cube |
 | [`tilelang_ascend/`](tilelang_ascend/) | TileLang | Python (`@tilelang.jit`) | 中 (偏调度) | tilelang + tilelang-ascend 后端 | 北大开源, 显式 L1/L0C tiling + T.gemm_v0→Cube |
 
@@ -19,11 +19,10 @@
 | python (CPU 基准) | — | 0.0 (vs np.matmul) | 4.27 s (朴素三重循环) | ✅ PASS |
 | triton_ascend | ✅ 跑通 | 0.0 | 0.79 ms | ✅ PASS |
 | tilelang_ascend | ✅ 跑通 | 9.77e-04 | 0.38 ms | ✅ PASS |
-| ascend_c | kernel 编译 ✅; host run 需官方 pack 框架 | (算法与基准同源) | — | ⚠️ kernel 逻辑已验证, 见其 README |
+| ascend_c | ✅ 跑通 | 0.0 | — | ✅ PASS |
 
-> ascend_c 的 kernel 源码经 `bisheng --cce-aicore-arch=dav-c220-cube` 编译成功(ELF arch 0x1029 = Ascend AICore),
-> 算法与 python/ 基准同源(朴素三重循环 + fp32 累加)。host 端直接 `aclrtBinaryLoadFromFile` 加载 raw `.o` 需
-> 官方 `ascendc_pack_kernel` 打包(详见 `ascend_c/README.md`)。
+> ascend_c 用官方 `ascendc.cmake` 框架 (`ascendc_library STATIC`) 自动完成 bisheng 编译 →
+> host stub 生成 → `ascendc_pack_kernel` 打包,host 调用 `aclrtlaunch_gemm_kernel()` 启动 kernel。
 
 ## 统一约定
 
@@ -62,7 +61,7 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 cd python && uv sync && uv run python src/gemm.py
 
 # 2. ascend_c (需 CANN + NPU)
-cd ascend_c && cmake -S . -B build && cmake --build build && ./build/ascend_gemm
+cd ascend_c && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j && ./build/ascend_gemm
 
 # 3. triton_ascend (需 torch_npu + triton-ascend, 详见其 README)
 cd triton_ascend && uv run python src/test_gemm.py
