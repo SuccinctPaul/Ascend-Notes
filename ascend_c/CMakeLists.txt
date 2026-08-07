@@ -95,13 +95,14 @@ add_custom_target(kernel ALL DEPENDS ${CMAKE_BINARY_DIR}/gemm_kernel.o)
 # aarch64 GCC 原生支持 __fp16; -fno-fast-math 避免过度优化影响精度校验
 # 依赖 kernel target: 确保 ./ascend_gemm 运行前 gemm_kernel.o 已编出 (host 默认从 cwd 加载它)
 # 链接库:
-#   ascendcl : ACL 主库 (aclrtBinaryLoadFromFile / aclrtLaunchKernelWithConfig 等)
-#   acl      : ACL 基础库 (aclInit / aclrtMalloc 等)
+#   ascendcl : ACL 主库 (aclInit / aclrtMalloc / aclrtBinaryLoadFromFile /
+#              aclrtLaunchKernelWithConfig / aclrtGetSocName 等)
 #   runtime  : 底层 rt 库 (rtGetC2cCtrlAddr, 910B cube kernel 的 FFTS 地址查询)
+# 注: 本版本没有独立的 libacl.so, ACL 全部入口都在 libascendcl.so 里。
 add_executable(ascend_gemm src/gemm_host.cpp)
 add_dependencies(ascend_gemm kernel)
 target_compile_options(ascend_gemm PRIVATE -fno-fast-math)
-target_link_libraries(ascend_gemm ascendcl acl runtime)
+target_link_libraries(ascend_gemm ascendcl runtime)
 
 # 默认从 build 目录运行: gemm_kernel.o 与 ascend_gemm 同在 ${CMAKE_BINARY_DIR}
 # 运行: cd build && ./ascend_gemm   (或 ./ascend_gemm /path/to/gemm_kernel.o)
