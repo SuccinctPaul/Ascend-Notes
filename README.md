@@ -8,7 +8,7 @@
 | 目录 | DSL | 语言 | 抽象层级 | 工具链 | 说明 |
 |---|---|---|---|---|---|
 | [`python/`](python/) | NumPy | Python | 最高 (无 NPU) | numpy + uv | **正确性基准 (ground truth)**, CPU 参考实现 |
-| [`ascend_c/`](ascend_c/) | Ascend C | C++ | 最低 | CANN `ascendc` 编译器 + ACL | CANN 原生 kernel, 直接操作硬件资源 |
+| [`ascend_c/`](ascend_c/) | Ascend C | C++ | 最低 | CANN `bisheng` 编译器 + ACL | CANN 原生 kernel, 直接操作硬件资源 (device 构建待调通, 见其 README) |
 | [`triton_ascend/`](triton_ascend/) | Triton | Python (`@triton.jit`) | 中 (块级) | triton-ascend 后端 + torch_npu | OpenAI Triton 的昇腾后端, `tl.dot`→Cube |
 | [`tilelang_ascend/`](tilelang_ascend/) | TileLang | Python (`@tilelang.jit`) | 中 (偏调度) | tilelang + tilelang-ascend 后端 | 北大开源, 显式 tiling/搬运/流水线 |
 
