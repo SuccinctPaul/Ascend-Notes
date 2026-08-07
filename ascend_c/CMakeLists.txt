@@ -61,8 +61,15 @@ set(ASCEND_AICORE_ARCH "dav-c220-cube" CACHE STRING
 # --cce-aicore-only : 只编 device kernel, 不链接 host stub
 # --cce-auto-sync   : 自动插入必要的同步 (官方框架默认开)
 # --cce-mask-opt    : mask 优化 (cube 模式官方默认开, 这里也带上)
+#
+# 注意: bisheng 在 --cce-aicore-only 模式下不接受 -o (报 "cannot specify -o
+# when generating multiple output files")。它会把 .o 写到 cwd, 文件名带 arch 后缀,
+# 形如 gemm_kernel-cce-hiipu64-hisilicon-cce-dav-c220-cube.o。因此先把输出目录
+# 指向 ${KERNEL_OBJ_DIR}, 编完再用 shell 把唯一那个 .o 移成 gemm_kernel.o。
+set(KERNEL_OBJ_DIR ${CMAKE_BINARY_DIR}/kernel_obj)
+file(MAKE_DIRECTORY ${KERNEL_OBJ_DIR})
 add_custom_command(
-    OUTPUT gemm_kernel.o
+    OUTPUT ${CMAKE_BINARY_DIR}/gemm_kernel.o
     COMMAND ${ASCENDC_COMPILER}
             --cce-aicore-lang
             --cce-aicore-arch=${ASCEND_AICORE_ARCH}
@@ -72,15 +79,26 @@ add_custom_command(
             -std=c++17 -O3
             ${ASCENDC_INCLUDE}
             ${CMAKE_SOURCE_DIR}/op_kernel/gemm_kernel.cpp
-            -c -o gemm_kernel.o
+            -c
+    COMMAND bash -c "mv ${KERNEL_OBJ_DIR}/gemm_kernel-*.o ${CMAKE_BINARY_DIR}/gemm_kernel.o"
+    WORKING_DIRECTORY ${KERNEL_OBJ_DIR}
     DEPENDS ${CMAKE_SOURCE_DIR}/op_kernel/gemm_kernel.cpp
     COMMENT "Compiling Ascend C kernel (bisheng, arch=${ASCEND_AICORE_ARCH})"
     VERBATIM
 )
-add_custom_target(kernel ALL DEPENDS gemm_kernel.o)
+add_custom_target(kernel ALL DEPENDS ${CMAKE_BINARY_DIR}/gemm_kernel.o)
 
 # ---- host 侧可执行文件 ----
 # aarch64 GCC 原生支持 __fp16; -fno-fast-math 避免过度优化影响精度校验
+# 依赖 kernel target: 确保 ./ascend_gemm 运行前 gemm_kernel.o 已编出 (host 默认从 cwd 加载它)
+# 链接库:
+#   ascendcl : ACL 主库 (aclrtBinaryLoadFromFile / aclrtLaunchKernelWithConfig 等)
+#   acl      : ACL 基础库 (aclInit / aclrtMalloc 等)
+#   runtime  : 底层 rt 库 (rtGetC2cCtrlAddr, 910B cube kernel 的 FFTS 地址查询)
 add_executable(ascend_gemm src/gemm_host.cpp)
+add_dependencies(ascend_gemm kernel)
 target_compile_options(ascend_gemm PRIVATE -fno-fast-math)
-target_link_libraries(ascend_gemm ascendcl acl)
+target_link_libraries(ascend_gemm ascendcl acl runtime)
+
+# 默认从 build 目录运行: gemm_kernel.o 与 ascend_gemm 同在 ${CMAKE_BINARY_DIR}
+# 运行: cd build && ./ascend_gemm   (或 ./ascend_gemm /path/to/gemm_kernel.o)

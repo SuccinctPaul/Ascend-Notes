@@ -78,13 +78,14 @@ gemm_host.cpp  ──[g++ + ACL]──►  ascend_gemm  (host 可执行)
 # 1. 加载 CANN 环境 (必须, 否则 ASCEND_HOME_PATH / bisheng 找不到)
 source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 
-# 2. 构建 (host 可执行 + 尝试编 kernel.o)
+# 2. 构建 (host 可执行 + 编 kernel.o)
 cd ascend_c
 cmake -S . -B build
 cmake --build build
 
-# 3. 运行 (需要 kernel.o 已成功编出)
-./build/ascend_gemm
+# 3. 运行 (在 build 目录里跑, 这样 host 能找到同目录的 gemm_kernel.o)
+cd build && ./ascend_gemm
+# 或指定 kernel 路径: ./ascend_gemm /path/to/gemm_kernel.o
 ```
 
 若 `bisheng` 编 kernel 时报 arch 不支持,可用 cache 变量覆盖:
@@ -95,9 +96,9 @@ cmake -S . -B build -DASCEND_AICORE_ARCH=dav-c220-cube   # ascend910b2 默认值
 #   ascend310p: -DASCEND_AICORE_ARCH=dav-m200
 ```
 
-预期输出(kernel 编出后):
+预期输出(910B2 实测):
 ```
-ascend_c GEMM: PASS (max_abs_error=0, M=N=K=128, dtype=fp16)
+ascend_c GEMM: PASS (max_abs_error=0, M=N=K=128, dtype=fp16, soc=Ascend910B2, ffts_prepended=yes, args_n=6)
 ```
 
 ### 官方框架路径(若直调 bisheng 不通)
