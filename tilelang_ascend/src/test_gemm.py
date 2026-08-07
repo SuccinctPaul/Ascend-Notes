@@ -9,7 +9,17 @@ TileLang-Ascend GEMM 正确性测试。
 
 注意: tilelang kernel 接受 torch tensor; ascend 后端要求张量在 npu 上。
 若环境未装 torch_npu, 可把 device 改为 cpu 做纯编译验证 (但不跑在 NPU 上)。
+
+环境变量:
+  ACL_OP_INIT_MODE=1 必须在 import torch_npu 前设置 —— tilelang 自带的 TVM 与
+  CANN 的 te 模块共享 TVM FFI 全局注册表, 会互相覆盖。设此变量跳过 torch_npu
+  的 TBE/GE 算子编译器初始化 (本测试只做张量分配 + tilelang 自管 kernel launch,
+  不走 torch_npu 图编译), 避免冲突。
 """
+
+import os
+# 必须在 import torch_npu 之前设置 (见文件 docstring 说明)
+os.environ.setdefault("ACL_OP_INIT_MODE", "1")
 
 import time
 import logging
@@ -55,9 +65,9 @@ def main():
     logging.info("预热编译 (首次调用触发 tilelang-ascend 编译)...")
     _ = gemm(a, b)
 
-    # 正式计时
+    # 正式计时 (K_L1=64: K=128 分 2 次搬到 L1, 展示累加语义)
     start = time.perf_counter()
-    c = gemm(a, b, block_M=128, block_N=128, block_K=32)
+    c = gemm(a, b, block_M=128, block_N=128, K_L1=64)
     elapsed = time.perf_counter() - start
     logging.info("TileLang kernel 耗时: %.4f ms", elapsed * 1000)
 

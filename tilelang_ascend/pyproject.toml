@@ -3,17 +3,22 @@ name = "tilelang-ascend"
 version = "0.1.0"
 description = "GEMM kernel written in TileLang, compiled for Ascend NPU via tilelang-ascend backend"
 readme = "README.md"
-requires-python = ">=3.10"
+# 锁 3.11: 与 triton_ascend 对齐, 便于共用 torch_npu 2.8.0rc1 (cp311 wheel)
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "numpy>=2.0",
-    "torch>=2.1",
+    # torch 版本必须与 torch_npu 严格一致: torch_npu 2.8.0rc1 ↔ torch 2.8.0
+    # (aarch64 + cp311 wheel 在 PyPI 可直接解析, 与 triton_ascend 同源)
+    "torch==2.8.0",
 ]
 
-# 注意: tilelang 主包 + tilelang-ascend 后端需手动安装:
+# 注意: tilelang 主包 + tilelang-ascend 后端 + torch_npu 需手动安装到本 venv:
 #   uv pip install tilelang
-#   git clone --recursive https://github.com/tile-ai/tilelang-ascend.git
-#   cd tilelang-ascend && bash install_ascend.sh && source set_env.sh
+#   curl -L -o /tmp/tnpu.whl <gitee torch_npu 2.8.0rc1 cp311 aarch64 wheel URL>
+#   uv pip install /tmp/tnpu.whl
+#   git clone --recursive https://github.com/tile-ai/tilelang-ascend.git /tmp/tilelang-ascend
+#   cd /tmp/tilelang-ascend && bash install_ascend.sh && source set_env.sh
 # 详见 README。
 
 [tool.uv]
-# 仅约束可从 PyPI 解析的包; tilelang / tilelang-ascend 走手动安装
+# 仅约束可从 PyPI 解析的包; tilelang / tilelang-ascend / torch_npu 走手动安装

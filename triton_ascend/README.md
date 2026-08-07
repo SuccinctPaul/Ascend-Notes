@@ -33,17 +33,19 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 ```bash
 cd triton_ascend
 uv venv --python 3.11          # 创建独立 venv
-uv sync                         # 安装 numpy, torch (PyPI 可解析部分)
+uv sync                         # 安装 numpy, torch==2.8.0 (PyPI 可解析部分)
 
 # 手动安装 (需匹配 CANN 9.0.0, 从昇腾官方获取对应 wheel):
-uv pip install torch_npu
-uv pip install triton-ascend    # 优先 pip; 失败则源码:
+uv pip install torch_npu        # torch_npu 2.8.0rc1 (cp311 aarch64, 匹配 torch 2.8.0)
+uv pip install triton-ascend    # triton-ascend 3.2.0; 失败则源码:
 #   git clone https://gitcode.com/Ascend/triton-ascend.git
 #   cd triton-ascend && pip install -e .
 ```
 
-> **版本匹配很关键**:torch_npu 必须与已装的 torch 版本和 CANN 版本一致,
-> 否则 import 时会报符号找不到。具体对应关系见 [昇腾文档](https://www.hiascend.com/)。
+> **版本匹配很关键**(本机实测组合):
+> - CANN 9.0.0 + torch 2.8.0 + torch_npu 2.8.0rc1 + triton-ascend 3.2.0
+> - torch_npu 必须与 torch 版本严格一致 (2.8.0rc1 ↔ 2.8.0), 否则 import 报符号找不到。
+> - triton-ascend 3.2.0 在 CANN 9.0.0 上有 enum 重命名 (见"常见问题")。
 
 ### 验证安装
 ```bash
@@ -93,8 +95,8 @@ uv run python src/test_gemm.py
 ```
 [INFO] === Triton-Ascend GEMM 测试 (dtype=float16) ===
 [INFO] 预热编译 (首次调用触发 triton-ascend 编译)...
-[INFO] Triton kernel 耗时: X.XXXX ms
-[INFO] 校验结果: PASS (max_abs_error=..., atol=1e-2, rtol=1e-2)
+[INFO] Triton kernel 耗时: 0.7885 ms
+[INFO] 校验结果: PASS (max_abs_error=0.000000e+00, atol=1e-2, rtol=1e-2)
 [INFO] Triton-Ascend GEMM 测试完成, 全部 PASS
 ```
 
@@ -110,5 +112,10 @@ uv run python src/test_gemm.py
 
 - **`import torch_npu` 报错**:torch_npu 与 torch 版本不匹配,或 CANN 未 source。
 - **`invalid device ordinal`**:`torch.npu.is_available()` 返回 False,检查 `npu-smi info` 是否可见设备。
+- **`no member named 'RT_LIMIT_TYPE_SIMT_WARP_STACK_SIZE'`**(triton-ascend 3.2.0 + CANN 9.0.0):
+  CANN 9.0.0 把该 enum 重命名为 `RT_LIMIT_TYPE_SIMT_DVG_WARP_STACK_SIZE`,而 triton-ascend 3.2.0 的
+  `backends/ascend/npu_utils.cpp` 仍用旧名。修复:把 venv 里
+  `triton/backends/ascend/npu_utils.cpp` 第 321 行的 `RT_LIMIT_TYPE_SIMT_WARP_STACK_SIZE` 全部替换为
+  `RT_LIMIT_TYPE_SIMT_DVG_WARP_STACK_SIZE`,再清空 `~/.triton` 缓存重跑。
 - **编译很慢**:首次 `@triton.jit` 调用会触发完整编译,后续走缓存(`~/.triton/cache`)。
 - **精度误差大**:确认累加器是 `tl.float32`,BLOCK 是 16 的倍数。
