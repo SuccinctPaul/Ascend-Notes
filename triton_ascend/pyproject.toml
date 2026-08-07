@@ -1,0 +1,18 @@
+[project]
+name = "triton-ascend"
+version = "0.1.0"
+description = "GEMM kernel written in Triton, compiled for Ascend NPU via triton-ascend backend"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0",
+    "torch>=2.1",
+]
+
+# 注意: torch_npu 和 triton-ascend 不在标准 PyPI 上可直接解析 (需匹配 CANN 版本,
+# 且 triton-ascend 多为源码安装)。请按 README 手动安装到本 venv:
+#   uv pip install torch_npu        # 匹配 CANN 的版本
+#   uv pip install triton-ascend    # 或源码: pip install -e <triton-ascend 源码>
+
+[tool.uv]
+# 仅约束可从 PyPI 解析的包; torch_npu / triton-ascend 走手动安装

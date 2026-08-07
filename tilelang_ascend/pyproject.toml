@@ -1,0 +1,19 @@
+[project]
+name = "tilelang-ascend"
+version = "0.1.0"
+description = "GEMM kernel written in TileLang, compiled for Ascend NPU via tilelang-ascend backend"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0",
+    "torch>=2.1",
+]
+
+# 注意: tilelang 主包 + tilelang-ascend 后端需手动安装:
+#   uv pip install tilelang
+#   git clone --recursive https://github.com/tile-ai/tilelang-ascend.git
+#   cd tilelang-ascend && bash install_ascend.sh && source set_env.sh
+# 详见 README。
+
+[tool.uv]
+# 仅约束可从 PyPI 解析的包; tilelang / tilelang-ascend 走手动安装
