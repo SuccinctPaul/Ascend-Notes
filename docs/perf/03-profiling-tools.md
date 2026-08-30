@@ -125,7 +125,7 @@ msprof op --config=<你的算子配置.json> --output=./out
 
 ### 5）也有对应"映射到本仓库"的小流程
 
-你写的 4 个 DSL 里，**最适合做 micro-profiling 的是 `ascend_c/` 直调 kernel 的那个可执行文件**（还有 tilelang 也能起 profile）。
+你写的 4 个 DSL 里，**最适合做 micro-profiling 的是 `examples/ascend_c/` 直调 kernel 的那个可执行文件**（还有 tilelang 也能起 profile）。
 大致流程：
 
 ```

@@ -69,6 +69,7 @@ plugins:
 nav:
   - 首页: index.md
   - 构建与部署说明: DEPLOYMENT.md
+  - 术语表: reference/context.md
   - 一、NPU 体系化架构:
       - 01 · AI Core 硬件模型全貌: hardware/01-ai-core-overview.md
       - 02 · 存储层级与访问权域: hardware/02-storage-hierarchy.md

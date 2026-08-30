@@ -38,7 +38,7 @@
 | **字节级（最低）** | 你能直接指到每个元素、每次搬运、每块缓冲（ascend_c） |
 | **块级（中）** | 你描述"块"，缓冲/分块/调度由编译器决定（triton） |
 | **调度级（中偏调度）** | 你显式指定缓冲与流水，但有高层原语（tilelang） |
-| **正确性基准** | python/np.matmul 用于对拍，不参与性能比较 |
+| **正确性基准** | examples/python/np.matmul 用于对拍，不参与性能比较 |
 
 ---
 
@@ -50,10 +50,10 @@
 
 | DSL | NPU 上是否跑通 | `max_abs_error`（对齐参考基准） | 耗时（128³ fp16） |
 |---|---|---|---|
-| `python/`（CPU 基准） | —（不跑 NPU） | 0.0（vs np.matmul） | **4.27 s**（朴素三重循环） |
-| `triton_ascend/` | ✅ | **0.0** | **0.79 ms** |
-| `tilelang_ascend/` | ✅ | **9.77e-04** | **0.38 ms** |
-| `ascend_c/` | ✅ | **0.0** | —（README 未给耗时） |
+| `examples/python/`（CPU 基准） | —（不跑 NPU） | 0.0（vs np.matmul） | **4.27 s**（朴素三重循环） |
+| `examples/triton_ascend/` | ✅ | **0.0** | **0.79 ms** |
+| `examples/tilelang_ascend/` | ✅ | **9.77e-04** | **0.38 ms** |
+| `examples/ascend_c/` | ✅ | **0.0** | —（README 未给耗时） |
 
 三个直接对比维度：
 - **CPU vs NPU 量级差距**：`4.27 s` 对比 `0.79 / 0.38 ms`——差了约 **5000~11000 倍**。
@@ -110,10 +110,10 @@
 
 | 你要什么 | 选 |
 |---|---|
-| 验证正确性 / 写参考解 | `python/` |
-| 上手快、代码少、性能尚可 | `triton_ascend/` |
-| 性能优先、又能接受不少顺手的显式调度 | `tilelang_ascend/` |
-| 极致的硬件控制 / 学习昇腾底层 / 前两者不够时 | `ascend_c/` |
+| 验证正确性 / 写参考解 | `examples/python/` |
+| 上手快、代码少、性能尚可 | `examples/triton_ascend/` |
+| 性能优先、又能接受不少顺手的显式调度 | `examples/tilelang_ascend/` |
+| 极致的硬件控制 / 学习昇腾底层 / 前两者不够时 | `examples/ascend_c/` |
 
 > 也得出结论：**从 triton 换到 tilelang，性能上一档、代码仍然很 Python；从任何 DSL 下沉到 ascend_c，是把控制力换到手、把开发成本背到身上。** 抽象层级（CONTEXT.md 的"抽象梯子"）刻画的就是这条"控制力 vs 成本"的取舍线。
 
@@ -121,10 +121,10 @@
 
 | 实现 | 一句话记（人话版） |
 |---|---|
-| `python/` | "对答案的草稿纸，别拿来比速度。" |
-| `triton_ascend/` | "我说要块，编译器替我排布——省事，但不一定最贴硬件。" |
-| `tilelang_ascend/` | "我连 L1/L0C 都指给你，速度上赢了，但要留意累加细节。" |
-| `ascend_c/` | "每字节每搬每核都是我亲手管——最费手，上限最高。" |
+| `examples/python/` | "对答案的草稿纸，别拿来比速度。" |
+| `examples/triton_ascend/` | "我说要块，编译器替我排布——省事，但不一定最贴硬件。" |
+| `examples/tilelang_ascend/` | "我连 L1/L0C 都指给你，速度上赢了，但要留意累加细节。" |
+| `examples/ascend_c/` | "每字节每搬每核都是我亲手管——最费手，上限最高。" |
 
 ### 8）新手 FAQ
 
@@ -164,10 +164,10 @@
 
 | DSL | 用在哪 | 代价 | 当你想要… |
 |---|---|---|---|
-| `python/` | 对答案 | 慢到没法比速 | 正确性基准 |
-| `triton_ascend/` | 快速上线 / 省事 | 性能一般 | 少写代码 |
-| `tilelang_ascend/` | 性能优先 | 要懂点显式调度 | 快而仍有 Python 味 |
-| `ascend_c/` | 极致 / 学底层 | 代码最重 | 逐字节掌控 |
+| `examples/python/` | 对答案 | 慢到没法比速 | 正确性基准 |
+| `examples/triton_ascend/` | 快速上线 / 省事 | 性能一般 | 少写代码 |
+| `examples/tilelang_ascend/` | 性能优先 | 要懂点显式调度 | 快而仍有 Python 味 |
+| `examples/ascend_c/` | 极致 / 学底层 | 代码最重 | 逐字节掌控 |
 
 ---
 

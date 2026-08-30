@@ -117,10 +117,10 @@ gantt
 
 | 实现 | 谁在 tiling | 谁在管流水 | 谁切核 | 你能控制多少 |
 |---|---|---|---|---|
-| `python/`（CPU 基准） | 无（整张算） | 无 | 无 | 最低 |
-| `ascend_c/` | 你自己写 host tiling + kernel 手工分块 | 你自己 DP（DataCopy/同步双缓冲） | 你 `SetBlockDim` | **最高（字节级）** |
-| `triton_ascend/` | 编译器推断 + `tl.block_ptr` 表达块 | 编译器自动 multi-stage | 编译器 `tl.program_id` | 中（块级） |
-| `tilelang_ascend/` | 你 `alloc_L1/L0C` 显式指 | `T.Pipelined(num_stages=…)` 显式流水 | 语言/编译器层 | 中偏调度（显式但高层） |
+| `examples/python/`（CPU 基准） | 无（整张算） | 无 | 无 | 最低 |
+| `examples/ascend_c/` | 你自己写 host tiling + kernel 手工分块 | 你自己 DP（DataCopy/同步双缓冲） | 你 `SetBlockDim` | **最高（字节级）** |
+| `examples/triton_ascend/` | 编译器推断 + `tl.block_ptr` 表达块 | 编译器自动 multi-stage | 编译器 `tl.program_id` | 中（块级） |
+| `examples/tilelang_ascend/` | 你 `alloc_L1/L0C` 显式指 | `T.Pipelined(num_stages=…)` 显式流水 | 语言/编译器层 | 中偏调度（显式但高层） |
 
 **对应到本仓库**：`tilelang` 写法（`alloc_L1/L0C + T.copy + T.gemm_v0 + T.Pipelined`）基本就是"把上面 1/2/3 部都显式说出来"；
 `triton` 更多把细节交给编译器；`ascend_c` 则每个字节每级缓冲都要你亲手管。

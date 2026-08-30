@@ -53,7 +53,7 @@ C[i,j] = Σ_{k=0}^{K-1} A[i,k]·B[k,j]      （每条 C[i,j] 是 A 一行 × B �
 
 ### 4.1 Python / NumPy —— 正确性基准（跑在 CPU）
 
-`python/src/gemm.py` 用三重循环逐元素累加，等价于"最笨的 GEMM"：
+`examples/python/src/gemm.py` 用三重循环逐元素累加，等价于"最笨的 GEMM"：
 
 ```python
 acc = fp32(0.0)
@@ -69,11 +69,11 @@ for i in range(M):
 
 ### 4.2 Ascend C —— 最接近硬件的底层写法
 
-`ascend_c/` 用 `GlobalTensor + 标量乘加`，逐元素读 GM（最朴素，甚至没充分用 Vector）。它是用官方 `ascendc.cmake`（`ascendc_library STATIC`）框架编译、host 用 `aclrtlaunch_gemm_kernel()` 启动的。它教会我们：**NPU 上搬数、算数、同步全靠显式代码**。
+`examples/ascend_c/` 用 `GlobalTensor + 标量乘加`，逐元素读 GM（最朴素，甚至没充分用 Vector）。它是用官方 `ascendc.cmake`（`ascendc_library STATIC`）框架编译、host 用 `aclrtlaunch_gemm_kernel()` 启动的。它教会我们：**NPU 上搬数、算数、同步全靠显式代码**。
 
 ### 4.3 Triton（triton-ascend）—— 声明式分块 + 自动 Cube
 
-`triton_ascend/src/gemm_triton.py`，一个 program 算一个 `BLOCK_M×BLOCK_N` 输出块：
+`examples/triton_ascend/src/gemm_triton.py`，一个 program 算一个 `BLOCK_M×BLOCK_N` 输出块：
 
 ```python
 accumulator = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
@@ -88,7 +88,7 @@ tl.store(c_block_ptr, accumulator.to(tl.float16))
 
 ### 4.4 TileLang（tilelang-ascend）—— 显式调度到 L1/L0C + Cube
 
-`tilelang_ascend/src/gemm_tilelang.py` 把内存层次和 Cube 调度**显式写进代码**，是四种里最接近"手控硬件"的抽象：
+`examples/tilelang_ascend/src/gemm_tilelang.py` 把内存层次和 Cube 调度**显式写进代码**，是四种里最接近"手控硬件"的抽象：
 
 ```python
 A_L1 = T.alloc_L1((block_M, K_L1), dtype)      # L1 缓冲（A 子块）
@@ -239,8 +239,8 @@ flowchart LR
 **本仓库（可本地核验，非外部 URL）：**
 - `README.md`（四 DSL 实测结果表、统一约定、运行环境）
 - `CONTEXT.md`（硬件架构、数据流、tiling、混合精度、Cube 16×16 MAC 术语表）
-- `python/src/gemm.py`（CPU 参考基准）
-- `triton_ascend/src/gemm_triton.py`、`tilelang_ascend/src/gemm_tilelang.py`、`ascend_c/`
+- `examples/python/src/gemm.py`（CPU 参考基准）
+- `examples/triton_ascend/src/gemm_triton.py`、`examples/tilelang_ascend/src/gemm_tilelang.py`、`examples/ascend_c/`
 
 **官方 / 论文（已验证 URL）：**
 - 华为昇腾 CANN 官方文档（CANN 商用版 8.0）《TCubeTiling 结构体》（Matmul 分块的 M/N/K、`L0A/L0B/L0C` 容量约束、INT8/FP16 的 C0_size 对齐）：

@@ -129,10 +129,10 @@ flowchart LR
 
 | DSL | 搬运/计算的可控度 | 典型表现 | 在 Roofline 上的位置 |
 |---|---|---|---|
-| `python/` | 不可控（CPU，无 NPU） | 最慢，仅作正确性基准 | 不进入 NPU 屋顶体系 |
-| `triton_ascend/` | 编译器决定分块 | 块级，利用率中等 | 点偏右下，离屋顶有优化缝 |
-| `tilelang_ascend/` | 显式 L1/L0C + 调度 | 显式 tiling，最贴近 Cube | 点最接近屋顶 |
-| `ascend_c/` | 逐元素、最细 | 需手写全套流水 | 以字节级控制可逼近屋顶 |
+| `examples/python/` | 不可控（CPU，无 NPU） | 最慢，仅作正确性基准 | 不进入 NPU 屋顶体系 |
+| `examples/triton_ascend/` | 编译器决定分块 | 块级，利用率中等 | 点偏右下，离屋顶有优化缝 |
+| `examples/tilelang_ascend/` | 显式 L1/L0C + 调度 | 显式 tiling，最贴近 Cube | 点最接近屋顶 |
+| `examples/ascend_c/` | 逐元素、最细 | 需手写全套流水 | 以字节级控制可逼近屋顶 |
 
 > 这份对比会在 `05-dsl-benchmark-analysis.md` 里用仓库实测数字展开解读。
 

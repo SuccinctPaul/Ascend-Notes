@@ -7,10 +7,10 @@
 
 | 目录 | DSL | 语言 | 抽象层级 | 工具链 | 说明 |
 |---|---|---|---|---|---|
-| [`python/`](python/) | NumPy | Python | 最高 (无 NPU) | numpy + uv | **正确性基准 (ground truth)**, CPU 参考实现 |
-| [`ascend_c/`](ascend_c/) | Ascend C | C++ | 最低 | CANN `ascendc.cmake` + `bisheng` + ACL | CANN 原生 kernel, 直接操作硬件资源 |
-| [`triton_ascend/`](triton_ascend/) | Triton | Python (`@triton.jit`) | 中 (块级) | triton-ascend 后端 + torch_npu | OpenAI Triton 的昇腾后端, `tl.dot`→Cube |
-| [`tilelang_ascend/`](tilelang_ascend/) | TileLang | Python (`@tilelang.jit`) | 中 (偏调度) | tilelang + tilelang-ascend 后端 | 北大开源, 显式 L1/L0C tiling + T.gemm_v0→Cube |
+| [`examples/python/`](examples/python/) | NumPy | Python | 最高 (无 NPU) | numpy + uv | **正确性基准 (ground truth)**, CPU 参考实现 |
+| [`examples/ascend_c/`](examples/ascend_c/) | Ascend C | C++ | 最低 | CANN `ascendc.cmake` + `bisheng` + ACL | CANN 原生 kernel, 直接操作硬件资源 |
+| [`examples/triton_ascend/`](examples/triton_ascend/) | Triton | Python (`@triton.jit`) | 中 (块级) | triton-ascend 后端 + torch_npu | OpenAI Triton 的昇腾后端, `tl.dot`→Cube |
+| [`examples/tilelang_ascend/`](examples/tilelang_ascend/) | TileLang | Python (`@tilelang.jit`) | 中 (偏调度) | tilelang + tilelang-ascend 后端 | 北大开源, 显式 L1/L0C tiling + T.gemm_v0→Cube |
 
 ## 实测结果 (Ascend 910B2 + CANN 9.0.0)
 
@@ -35,10 +35,10 @@
 ## 快速对比:四种 DSL 写同一个 GEMM
 
 ```
-python/          →  三重循环 (np.matmul 基准)
-ascend_c/        →  GlobalTensor + 标量乘加 (逐元素读 GM, 最朴素)
-triton_ascend/   →  make_block_ptr + tl.dot (分块 + Cube 自动调用)
-tilelang_ascend/ →  alloc_L1/L0C + T.copy + T.gemm_v0 + T.Scope("C") (显式 Ascend 内存层次/Cube 调度)
+examples/python/          →  三重循环 (np.matmul 基准)
+examples/ascend_c/        →  GlobalTensor + 标量乘加 (逐元素读 GM, 最朴素)
+examples/triton_ascend/   →  make_block_ptr + tl.dot (分块 + Cube 自动调用)
+examples/tilelang_ascend/ →  alloc_L1/L0C + T.copy + T.gemm_v0 + T.Scope("C") (显式 Ascend 内存层次/Cube 调度)
 ```
 
 ## 运行环境
@@ -47,7 +47,7 @@ tilelang_ascend/ →  alloc_L1/L0C + T.copy + T.gemm_v0 + T.Scope("C") (显式 A
 - 架构:aarch64 (Ubuntu)
 - CANN:9.0.0
 - NPU:Ascend910B 系列
-- 所有 NPU kernel 在此服务器上构建与测试;`python/` 基准可在任意机器跑。
+- 所有 NPU kernel 在此服务器上构建与测试;`examples/python/` 基准可在任意机器跑。
 
 ### 运行前置(每次 shell 都要先 source)
 ```bash
@@ -58,16 +58,16 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 
 ```bash
 # 1. python 基准 (CPU, 任意机器)
-cd python && uv sync && uv run python src/gemm.py
+cd examples/python && uv sync && uv run python src/gemm.py
 
 # 2. ascend_c (需 CANN + NPU)
-cd ascend_c && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j && ./build/ascend_gemm
+cd examples/ascend_c && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j && ./build/ascend_gemm
 
 # 3. triton_ascend (需 torch_npu + triton-ascend, 详见其 README)
-cd triton_ascend && uv run python src/test_gemm.py
+cd examples/triton_ascend && uv run python src/test_gemm.py
 
 # 4. tilelang_ascend (需 tilelang + tilelang-ascend, 详见其 README)
-cd tilelang_ascend && uv run python src/test_gemm.py
+cd examples/tilelang_ascend && uv run python src/test_gemm.py
 ```
 
 每个 DSL 的预期结果均包含 `PASS`。详见各目录 README。
