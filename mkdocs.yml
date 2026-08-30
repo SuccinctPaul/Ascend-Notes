@@ -86,6 +86,7 @@ nav:
       - 08 · 量化与反量化: ops/08-quantization.md
       - 09 · GEMM（四种 DSL 实证）: ops/09-gemm.md
   - 三、性能优化与 Profiling:
+      - 00 · 如何计算 NPU 算力: perf/00-npu-peak-flops-calculation.md
       - 01 · 性能模型与 Roofline: perf/01-roofline-perf-model.md
       - 02 · Tiling 与流水线重叠: perf/02-tiling-pipeline-overlap.md
       - 03 · Profiling 工具与读法: perf/03-profiling-tools.md
