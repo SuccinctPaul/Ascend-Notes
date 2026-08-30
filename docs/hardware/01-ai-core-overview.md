@@ -244,7 +244,7 @@ Vector 才能算。这就是“为什么不能在 L0C 上做 ReLU”的硬件原
 
 ---
 
-## 六、人话总结
+## 六、TL;DR
 
 1. 昇腾 = 芯片级（GM/共享存储/AI CPU）+ 核级（几十个 AI Core）。
 2. 一个 AI Core = Cube + Vector + Scalar + DMA 四引擎 + 一排片上货架。
