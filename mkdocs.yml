@@ -92,6 +92,7 @@ nav:
       - 03 · Profiling 工具与读法: perf/03-profiling-tools.md
       - 04 · 瓶颈识别与优化手段: perf/04-bottleneck-and-optimization.md
       - 05 · 四种 DSL 实测解读: perf/05-dsl-benchmark-analysis.md
+      - 06 · 实战：GEMM 128³ Roofline 分析案例: perf/06-roofline-case-study.md
 
 extra:
   generator: false
