@@ -1,0 +1,13 @@
+[project]
+name = "ascend-notes-docs"
+version = "0.1.0"
+description = "Ascend-Notes 文档站点的构建工具链依赖（mkdocs + material + i18n）"
+requires-python = ">=3.10"
+dependencies = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocs-static-i18n>=1.2",
+]
+
+[tool.uv]
+    package = false

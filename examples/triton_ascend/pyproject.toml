@@ -1,0 +1,22 @@
+[project]
+name = "triton-ascend"
+version = "0.1.0"
+description = "GEMM kernel written in Triton, compiled for Ascend NPU via triton-ascend backend"
+readme = "README.md"
+# torch_npu 2.8.0rc1 (匹配 CANN 9.0.0) 仅发布 cp311 wheel, 故锁定 3.11
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "numpy>=2.0",
+    # torch 版本必须与 torch_npu 版本严格一致: torch_npu 2.8.0rc1 ↔ torch 2.8.0
+    "torch==2.8.0",
+]
+
+# 注意: torch_npu 与 triton-ascend 不在标准 PyPI 上可直接解析 (torch_npu 需匹配 CANN 版本,
+# 且 aarch64 wheel 在 gitee; triton-ascend 多为源码/特定 index 安装)。请按 README 手动安装到本 venv:
+#   uv pip install torch==2.8.0                       # 已由 dependencies 装好
+#   curl -L -o /tmp/tnpu.whl <gitee torch_npu 2.8.0rc1 cp311 aarch64 wheel URL>
+#   uv pip install /tmp/tnpu.whl                      # 注意保留 cp311-cp311-manylinux 文件名
+#   uv pip install triton-ascend                      # 或源码: pip install -e <triton-ascend 源码>
+
+[tool.uv]
+# 仅约束可从 PyPI 解析的包; torch_npu / triton-ascend 走手动安装
