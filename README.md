@@ -71,3 +71,13 @@ cd tilelang_ascend && uv run python src/test_gemm.py
 ```
 
 每个 DSL 的预期结果均包含 `PASS`。详见各目录 README。
+
+## Docs
+
+```bash
+# 1. 安装依赖（首次运行，会创建 .venv）
+uv sync
+
+# 2. 启动本地预览服务器
+uv run mkdocs serve
+```

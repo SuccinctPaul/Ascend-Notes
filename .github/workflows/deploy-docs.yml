@@ -1,0 +1,59 @@
+# 自动构建 mkdocs 文档站并部署到 GitHub Pages
+#
+# 触发方式：push 到 main 分支（或手动在 Actions 页 Run workflow）
+# 可选：把 on.push.branches 里加自己的主分支名（如 master）。
+name: Deploy docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 授予 Pages 所需的最小权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个部署任务，新的会取消旧的
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # 用 uv 解析根 pyproject.toml，安装 mkdocs / material / i18n 等依赖
+      - name: Install docs dependencies
+        run: uv sync --frozen
+
+      - name: Build mkdocs site
+        run: uv run mkdocs build
+
+      # 把构建产物 site/ 打包成 Pages artifact
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      # 把上一步的 artifact 发布到 GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
