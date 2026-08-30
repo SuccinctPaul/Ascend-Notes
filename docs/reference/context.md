@@ -216,7 +216,7 @@ A 分块 16×16，B 分块 16×16，硬件在一个周期内算出 C 分块 16×
 输入是 fp16，但在片内用 fp32 累加（对应你之前学的精度知识）。
 中间结果暂存在 L0C（Cube 的专用累加缓冲）。
 
-![ai_core_cube_16x16.png](images/ai_core_cube_16x16.png)
+![ai_core_cube_16x16.png](../assets/ai_core_cube_16x16.png)
 
 ### Vector 单元：做逐元素运算（加法、激活、归一化），一次处理一批元素。
 
@@ -227,7 +227,7 @@ A 分块 16×16，B 分块 16×16，硬件在一个周期内算出 C 分块 16×
 数据流是这样走的：GM（全局内存）→ L1 → L0A/L0B → Cube → L0C → UB → GM。
 
 
-![img.png](img.png)
+![img.png](../assets/img.png)
 
 
 ## Language
