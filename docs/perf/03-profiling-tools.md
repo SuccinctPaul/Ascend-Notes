@@ -159,7 +159,7 @@ msprof op --config=<你的算子配置.json> --output=./out
 
 ---
 
-## 人话总结
+## TL;DR
 
 1. **`msprof`**：广角，整程序或按算子采整体耗时；**`msprof op`**：微距，单算子内部流水/搬运细节。
 2. **json** 用 chrome://tracing 看 timeline；**csv** 直接打开看列。

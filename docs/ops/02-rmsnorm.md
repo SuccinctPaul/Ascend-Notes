@@ -229,7 +229,7 @@ flowchart LR
 
 ---
 
-## 七、人话总结
+## 七、TL;DR
 
 - **RMSNorm = 省略均值的 LayerNorm**，只算均方根再归一化，快而稳；
 - 公式三步：`rms → 除以 RMS → 乘 gamma`；

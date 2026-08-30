@@ -11,7 +11,7 @@
 GEMM（矩阵乘，`C = A·B`）是**大模型几乎全部算力的来源**：每个 Transformer 的投影、前馈、注意力打分都是 GEMM。它也因此是移植到昇腾 NPU 的第一课。本仓库用一个 `128×128`、fp16 的 GEMM，用 **4 种 DSL** 各写一遍，互相验证正确性、并对比性能，从而把"直线加速的 GP 上怎么把数据搬 + 算"一次讲透。
 
 ```
-人话总结：GEMM 是"算尽天下"，四种手段（Python/原型、Ascend C 最底层、Triton、TileLang）
+TL;DR：GEMM 是"算尽天下"，四种手段（Python/原型、Ascend C 最底层、Triton、TileLang）
        跑同一个矩阵乘，看它们如何分块、如何复用数据、如何用上 Cube 的 16×16 硬件。
 ```
 
@@ -224,7 +224,7 @@ flowchart LR
 
 ---
 
-## 八、人话总结
+## 八、TL;DR
 
 - GEMM = `C=A·B`，是大模型的算力主体；
 - 本仓库用 **Python / Ascend C / Triton / TileLang** 四种 DSL 跑同一个 128³ fp16 GEMM，用 `allclose(atol=rtol=1e-2)` 互相验证全部 PASS；
