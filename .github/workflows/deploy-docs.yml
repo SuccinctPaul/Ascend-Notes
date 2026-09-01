@@ -1,7 +1,6 @@
-# 自动构建 mkdocs 文档站并部署到 GitHub Pages
+# 自动构建 Vocs 文档站并部署到 GitHub Pages
 #
 # 触发方式：push 到 main 分支（或手动在 Actions 页 Run workflow）
-# 可选：把 on.push.branches 里加自己的主分支名（如 master）。
 name: Deploy docs to GitHub Pages
 
 on:
@@ -27,21 +26,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-      # 用 uv 解析根 pyproject.toml，安装 mkdocs / material / i18n 等依赖
-      - name: Install docs dependencies
-        run: uv sync --frozen
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
 
-      - name: Build mkdocs site
-        run: uv run mkdocs build
+      - name: Build Vocs site
+        run: npx vocs build
 
-      # 把构建产物 site/ 打包成 Pages artifact
+      # 把构建产物 dist/ 打包成 Pages artifact
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: dist
 
   deploy:
     needs: build

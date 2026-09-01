@@ -1,0 +1,42 @@
+---
+layout: landing
+---
+
+# Ascend NPU 知识库
+
+**面向 0→1 新手的昇腾 Ascend NPU 知识库**
+
+从硬件架构到 LLM 算子优化，从性能模型到 Profiling 实战——
+帮你一步步成长为专业的 NPU 开发者。
+
+[从硬件架构开始](/hardware/01-ai-core-overview) · [术语表](/reference/context) · [GitHub](https://github.com/SuccinctPaul/Ascend-Notes)
+
+---
+
+## 一、NPU 体系化架构
+
+从「一个算子跑在什么样的物理世界里」讲起，并横向对比主流 AI 芯片。
+
+| 篇目 | 内容 |
+|---|---|
+| [01 · AI Core 硬件模型全貌](/hardware/01-ai-core-overview) | Cube / Vector / Scalar / DMA 四引擎、AI Core 集群、多核并行 |
+| [02 · 存储层级与访问权域](/hardware/02-storage-hierarchy) | GM(HBM)、L1、L0A/B/C、UB，DMA 唯一搬运，显式内存管理 |
+| [03 · host/device 与 kernel 生命周期](/hardware/03-host-device-kernel-lifecycle) | 两级分工、异步提交/同步，算子从需求到部署的全流程 |
+| [04 · 昇腾 vs Hopper vs Gaudi](/hardware/04-npu-architecture-comparison) | 存储、计算单元、搬运、显式/隐式内存管理的横向对比 |
+
+## 二、LLM 优化算子
+
+每个算子讲清楚：**数学定义 → 为什么需要 → 朴素实现 → NPU 关键优化点**。
+
+覆盖：element-wise 与算子融合、RMSNorm、Softmax、RoPE、GELU、GQA 与 KV Cache、
+FlashAttention、量化与反量化、GEMM（四种 DSL 实证）。
+
+## 三、性能优化与 Profiling
+
+讲清楚「如何分析一个 NPU 算子的性能瓶颈并优化」。
+
+| 篇目 | 内容 |
+|---|---|
+| [00 · 如何计算 NPU 算力](/perf/00-npu-peak-flops-calculation) | 从 Cube 16×16×16 推导峰值 TFLOPS |
+| [01 · 性能模型与 Roofline](/perf/01-roofline-perf-model) | 计算强度、山脊点、带宽/计算受限 |
+| [06 · 实战：GEMM 128³ Roofline 分析](/perf/06-roofline-case-study) | 用仓库实测数据走完整流程 |
