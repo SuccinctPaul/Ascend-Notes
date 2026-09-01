@@ -39,28 +39,28 @@ M4  算子分类
 ```mermaid
 flowchart TB
     subgraph SYS["芯片级 (全核共享)"]
-        GM[("GM / HBM<br/>存 A·B·C 原始数据")]
-        SHARE["片上共享存储<br/>核间中转信道 (仅跨核时用)"]
-        AICPU["AI CPU<br/>复杂控制/整数逻辑"]
+        GM[("GM / HBM 存 A·B·C 原始数据")]
+        SHARE["片上共享存储 核间中转信道 (仅跨核时用)"]
+        AICPU["AI CPU 复杂控制/整数逻辑"]
     end
 
     subgraph CORE["单个 AI Core"]
         direction TB
-        L1_["L1 统一缓存<br/>核内共享: Cube 与 Vector 共用"]
+        L1_["L1 统一缓存 核内共享: Cube 与 Vector 共用"]
         subgraph CUBEDOM["Cube 域 —— 引擎只碰域内缓冲"]
-            CUBE["Cube 引擎<br/>矩阵乘 16×16"]
+            CUBE["Cube 引擎 矩阵乘 16×16"]
             L0A_[L0A 输入预取]
             L0B_[L0B 输入预取]
             L0C_[L0C 累加器 (fp32)]
         end
         subgraph VECDOM["Vector 域 —— 引擎只碰 UB"]
             UB_[UB 统一缓冲]
-            VEC_["Vector 引擎<br/>逐元素运算"]
-            SCA_["Scalar 引擎<br/>控制/地址"]
+            VEC_["Vector 引擎 逐元素运算"]
+            SCA_["Scalar 引擎 控制/地址"]
         end
     end
 
-    DMA["DMA 引擎<br/>唯一搬运工"]
+    DMA["DMA 引擎 唯一搬运工"]
 
     GM <-->|DMA| DMA
     DMA <-->|DMA| SHARE
@@ -87,12 +87,12 @@ flowchart TB
 ```mermaid
 flowchart LR
     A1["① 数据躺在 GM"]
-    A2["②a 直达: DMA GM→L1 (核内私有数据)<br/>②b 跨核才绕: DMA 经共享存储"]
+    A2["②a 直达: DMA GM→L1 (核内私有数据) ②b 跨核才绕: DMA 经共享存储"]
     A3["③ DMA → 核内 L1 (统一缓存)"]
     A4["④ 灌入 → L0A / L0B (Cube 域输入)"]
     A5["⑤ Cube 取数计算 16×16 (Cube 引擎)"]
     A6["⑥ 结果累加到 L0C (fp32) (Cube 域累加器)"]
-    A7["⑦ 若需 Vector 加工:<br/>DMA 跨域 L0C → UB"]
+    A7["⑦ 若需 Vector 加工: DMA 跨域 L0C → UB"]
     A8["⑧ Vector 在 UB 上做 ReLU 等 (Vector 域)"]
     A9["⑨ DMA 搬回 GM"]
 
@@ -171,13 +171,13 @@ sequenceDiagram
     rect rgb(255,248,240)
     Note over Host,Dev2: 阶段二：运行期 —— 每次调用
     Host->>Host: ③ 在 CPU 上计算 tiling 参数(M/K/N、分块、核数)
-    Host->>ACL: ④ aclrtLoadKernel 把二进制加载进 device<br/>(拿到 kernel handle，只加载一次)
+    Host->>ACL: ④ aclrtLoadKernel 把二进制加载进 device (拿到 kernel handle，只加载一次)
     Host->>ACL: ⑤ 准备输入数据，拷到 device 的 GM
-    Host->>ACL: ⑥ aclrtlaunch_gemm_kernel(handle, args)<br/>⚠️ 只是"下发任务"，CPU 立刻返回
+    Host->>ACL: ⑥ aclrtlaunch_gemm_kernel(handle, args) ⚠️ 只是"下发任务"，CPU 立刻返回
     ACL->>Dev2: ⑦ 把任务提交到 NPU 任务队列
     Note over Host,Dev2: ⑧ CPU 继续干别的，不等 NPU
     Dev2->>Dev2: ⑨ AI Core 执行 kernel(算 tiling→切核→搬运→Cube)
-    Host->>ACL: ⑩ aclrtSynchronizeStream(stream)<br/>阻塞等待 NPU 全部完成
+    Host->>ACL: ⑩ aclrtSynchronizeStream(stream) 阻塞等待 NPU 全部完成
     ACL->>Host: ⑪ 返回(任务完成)
     Host->>ACL: ⑫ 把结果从 device GM 拷回 host
     end

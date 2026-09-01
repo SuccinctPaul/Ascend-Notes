@@ -86,12 +86,12 @@ GM 访问次数能降下来好几个数量级——这就是“GM 访问下降 N
 ```mermaid
 flowchart TB
     subgraph CHIP["芯片级 (全核共享)"]
-        GM[("GM / HBM<br/>容量最大 · 速度最慢 · 数据仓库")]
-        SHARE["片上共享存储<br/>核间中转信道"]
+        GM[("GM / HBM 容量最大 · 速度最慢 · 数据仓库")]
+        SHARE["片上共享存储 核间中转信道"]
     end
     subgraph CORE["单个 AI Core"]
         direction TB
-        L1["L1 统一缓存<br/>核内共享: Cube 与 Vector 共用"]
+        L1["L1 统一缓存 核内共享: Cube 与 Vector 共用"]
         subgraph CUBEDOM["Cube 域"]
             L0A["L0A 输入预取"]
             L0B["L0B 输入预取"]
@@ -162,7 +162,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     A1["① 数据躺在 GM"]
-    A2["②a 直达: DMA GM→L1 (核内私有数据)<br/>②b 跨核才绕: DMA 经共享存储"]
+    A2["②a 直达: DMA GM→L1 (核内私有数据) ②b 跨核才绕: DMA 经共享存储"]
     A3["③ DMA → 核内 L1 (统一缓存)"]
     A4["④ 灌入 → L0A / L0B (Cube 域输入)"]
     A5["⑤ Cube 取数计算 16×16"]

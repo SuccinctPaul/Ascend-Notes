@@ -73,7 +73,7 @@ A (16×16)  ×  B (16×16)  =  C (16×16)
 
 ```mermaid
 flowchart LR
-    A["Cube 单元<br/>8192 FLOP/周期"] --> B["× AI Core 数"]
+    A["Cube 单元 8192 FLOP/周期"] --> B["× AI Core 数"]
     B --> C["= 全芯片 FLOP/周期"]
     C --> D["× 时钟频率 (Hz)"]
     D --> E["= 峰值 FLOPS"]
