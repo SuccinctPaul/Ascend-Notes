@@ -37,11 +37,11 @@ jobs:
       - name: Build Vocs site
         run: npx vocs build
 
-      # 把构建产物 dist/ 打包成 Pages artifact
+      # 把静态 HTML 产物 dist/public/ 打包成 Pages artifact
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: dist/public
 
   deploy:
     needs: build

@@ -256,14 +256,14 @@ host 算、device 用——这是两级分工的关键之一。
 > 以下链接均已核实，可在昇腾官方域名下访问。
 
 - 华为昇腾 · CANN 社区版 Ascend C 算子开发指南（Kernel 直调 / ACLRT\_LAUNCH\_KERNEL / stream）：
-  https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/81RC1alpha001/devguide/opdevg/ascendcopdevg/atlas_ascendc_10_0051.html
+  <https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/81RC1alpha001/devguide/opdevg/ascendcopdevg/atlas_ascendc_10_0051.html>
 
 - 华为昇腾 · AscendCL API 参考 aclrtSynchronizeStream（阻塞等待 stream 任务完成）：
-  https://www.hiascend.cn/document/detail/zh/canncommercial/80RC2/apiref/appdevgapi/aclcppdevg_03_0075.html
+  <https://www.hiascend.cn/document/detail/zh/canncommercial/80RC2/apiref/appdevgapi/aclcppdevg_03_0075.html>
 
 - 华为昇腾 · AscendCL API 参考 aclrtLaunchKernel（异步下发、必须同步）：
-  https://www.hiascend.cn/document/detail/zh/CANNCommunityEdition/80RC3alpha001/apiref/appdevgapi/aclcppdevg_03_0145.html
+  <https://www.hiascend.cn/document/detail/zh/CANNCommunityEdition/80RC3alpha001/apiref/appdevgapi/aclcppdevg_03_0145.html>
 
 - 华为昇腾 · Ascend C 编程模型概述（host/device 两级异构体系）：
-  https://asc.gitcode.com/guide/编程指南/编程模型/编程模型概述.html
+  <https://asc.gitcode.com/guide/编程指南/编程模型/编程模型概述.html>
 

@@ -6,6 +6,7 @@ export default defineConfig({
     '面向 0→1 新手的 NPU 知识库，以昇腾 Ascend NPU 为核心，涵盖硬件架构、LLM 算子、性能优化与 Profiling。',
   basePath: '/Ascend-Notes',
   rootDir: 'docs',
+  renderStrategy: 'full-static',
   iconUrl: '/icon.svg',
   socials: [
     {
