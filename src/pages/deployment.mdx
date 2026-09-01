@@ -38,7 +38,9 @@ npm run dev
 npm run build
 ```
 
-构建产物在 `dist/` 目录，可直接用 `npm run preview` 预览构建结果。
+构建产物在 `dist/public/` 目录（纯静态 HTML/JS/CSS），可直接用 `npm run preview` 预览构建结果。
+
+> `vocs.config.ts` 中设置了 `renderStrategy: 'full-static'`，确保输出纯静态文件以适配 GitHub Pages。
 
 ## 3. 部署到 GitHub Pages
 

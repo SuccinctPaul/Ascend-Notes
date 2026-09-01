@@ -1,120 +1,121 @@
-# 构建 / 部署文档站（mkdocs · uv · GitHub Pages）
+---
+title: 构建与部署说明
+---
 
-> 本页面向 **0 到 1 新手**：照着一步步，把文档站跑起来并发布到 GitHub Pages。
-> 全部用 **uv** 工具链，不手动装任何东西到系统。
+# 构建与部署说明
+
+本仓库使用 [Vocs](https://vocs.dev)（React + Vite 驱动的静态文档生成器）构建文档站点，部署到 GitHub Pages。
 
 ---
 
-## 0. 这个东西是什么
-
-仓库里与「文档站」相关的文件：
-
-| 文件 / 目录 | 作用 |
-|---|---|
-| `mkdocs.yml` | 站点配置：主题、目录导航、i18n、mermaid |
-| `docs/` | 文档源文件（Markdown） |
-| `pyproject.toml` | 用 uv 声明站点依赖（mkdocs / material / i18n） |
-| `.github/workflows/deploy-docs.yml` | **推上 GitHub 后自动构建并发布**到 Pages |
-| `.venv` | uv 自动生成的虚拟环境（本地构建用，不入库） |
-| `site/` | 本地构建产物（自动生成，不入库） |
-
-> 「人话」：你只负责写好 `docs/` 里的 Markdown；mkdocs 负责把它渲染成
-> 一个好看的网站；GitHub Actions 负责在你 push 后自动把这个网站发布出去。
-
----
-
-## 1. 本地预览（先看看长什么样）
+## TL;DR
 
 ```bash
-# 在仓库根目录
-uv sync                  # 第一次运行，下载并安装 mkdocs 等依赖到 .venv
-uv run mkdocs serve     # 启动本地预览服务器
+npm install --legacy-peer-deps   # 安装依赖
+npm run dev                      # 本地预览 (http://localhost:5173)
+npm run build                    # 构建静态站点 → dist/
 ```
-
-浏览器打开 http://127.0.0.1:8000/ 即可预览。改动 `docs/` 里的文件会自动刷新。
-
-终止：按 `Ctrl+C`。
 
 ---
 
-## 2. 本地构建验证（上线前必须过这一关）
+## 前置条件
 
-`--strict` 会把任何警告当作错误，确保干净上线：
+1. **Node.js 22+**（推荐用 [fnm](https://github.com/Schniz/fnm) 或 [nvm](https://github.com/nvm-sh/nvm) 管理）
+2. **npm**（随 Node.js 安装）
+
+## 1. 本地预览
 
 ```bash
-uv run mkdocs build --strict
+npm install --legacy-peer-deps
+npm run dev
 ```
 
-成功后会在 `site/` 生成静态网站。**每次发布前都先跑一次**，若报错，根据报错
-提示修好再继续。
+浏览器打开 `http://localhost:5173`，修改 `src/pages/` 下的文件会自动热刷新。
 
----
-
-## 3. 发布到 GitHub Pages
-
-### 3.1 前提：仓库在 GitHub 上
-
-把仓库推到 GitHub 后（例如用户名 `yourname`、仓库名 `Ascend-Notes`）。
-
-### 3.2 在 GitHub 仓库设置里打开 Pages（一次性）
-
-1. 打开仓库页 → **Settings** → 左侧 **Pages**。
-2. **Build and deployment → Source** 选择 **GitHub Actions**（不是 Deploy from a branch）。
-3. 保存。
-
-> ⚠️ 一定要选 **GitHub Actions**，我们的 workflow 会负责构建；如果选
-> 「Deploy from a branch」则不会走到我们配的自动构建。
-
-### 3.3 推送触发自动部署
-
-把代码 push 到默认分支（本仓库 workflow 监听 `main`）：
+## 2. 本地构建
 
 ```bash
-git add .
-git commit -m "feat: add mkdocs docs site with navigation and i18n"
-git push
+npm run build
 ```
 
-push 后到 **Actions** 标签页，会看到一个 **Deploy docs to GitHub Pages** 任务，
-等它的 `build` 与 `deploy` 两个 job 都变绿。
+构建产物在 `dist/public/` 目录（纯静态 HTML/JS/CSS），可直接用 `npm run preview` 预览构建结果。
 
-### 3.4 访问地址
+> `vocs.config.ts` 中设置了 `renderStrategy: 'full-static'`，确保输出纯静态文件以适配 GitHub Pages。
 
-部署完成后，站点地址是：
+## 3. 部署到 GitHub Pages
+
+### 3.1 GitHub 仓库设置
+
+1. 打开仓库 **Settings → Pages**
+2. **Source** 选择 **GitHub Actions**（不是 Deploy from a branch）
+3. 保存
+
+### 3.2 自动部署
+
+仓库已配置 [GitHub Actions workflow](https://github.com/SuccinctPaul/Ascend-Notes/blob/main/.github/workflows/deploy-docs.yml)，
+每次 push 到 `main` 分支会自动：
+
+1. 安装 Node.js 22 + npm 依赖
+2. 执行 `npx vocs build` 构建静态站点
+3. 将 `dist/` 上传为 Pages artifact
+4. 部署到 GitHub Pages
+
+部署完成后，站点地址为：
+```
+https://succinctpaul.github.io/Ascend-Notes/
+```
+
+> **注意**：`vocs.config.ts` 中的 `basePath: '/Ascend-Notes'` 必须与你的仓库名一致。
+> 如果你把仓库改名为 `my-docs`，`basePath` 也要改成 `'/my-docs'`。
+
+### 3.3 手动触发部署
+
+在 GitHub 仓库的 **Actions** 页，找到 "Deploy docs to GitHub Pages" workflow，点 **Run workflow** 即可手动触发。
+
+## 4. 项目结构
 
 ```
-https://<你的用户名>.github.io/<仓库名>/
+Ascend-Notes/
+├── .github/workflows/deploy-docs.yml   # GitHub Actions 部署脚本
+├── docs/                                # Vocs 根目录
+│   ├── pages/                           # 文档页面（文件路由）
+│   │   ├── index.mdx                    # 首页（landing 布局）
+│   │   ├── hardware/                    # 一、NPU 体系化架构
+│   │   ├── ops/                         # 二、LLM 优化算子
+│   │   ├── perf/                        # 三、性能优化与 Profiling
+│   │   ├── reference/                   # 术语表
+│   │   └── deployment.mdx              # 本文件
+│   └── public/                          # 静态资源（图片等）
+├── src/pages/                           # 软链接到 docs/pages（Vocs 搜索索引需要）
+├── vocs.config.ts                       # Vocs 配置（sidebar、socials、editLink 等）
+├── package.json                         # npm 依赖与脚本
+└── .gitignore
 ```
 
-在 `mkdocs.yml` 顶部 `site_url:` 里填入这个地址（例如 `https://yourname.github.io/Ascend-Notes/`），
-再 commit + push 一次，让搜索/站点元信息更准确。
+## 5. 常见问题
 
----
+### Q: `npm install` 报 peer dependency 冲突？
 
-## 4. 目录导航与多语言（i18n）
-
-- **目录导航**：左侧菜单由 `mkdocs.yml` 的 `nav:` 控制；新加一篇文章，
-  在 `docs/`（或子目录）放好 `.md` 后，把路径加进 `nav:` 即可。
-- **多语言**：默认语言是**中文**（`zh`），站点右上角可切换到英文。已启用
-  `mkdocs-static-i18n`：
-  - 中文源文件：`docs/*.md`（不带语言后缀，默认语言）。
-  - 英文翻译：同路径但文件名加 `.en` 后缀，例如 `docs/index.en.md`、`docs/ops/09-gemm.en.md`。
-  - 某个页面还没英文版时，会**自动回退显示中文**（`fallback_to_default: true`），
-    站点不会因此构建失败。
-  - 想加语言：在 `mkdocs.yml` 的 `i18n.languages` 里增一条，再写对应后缀文件。
-
-> 已存在的英文首页示例：`docs/index.en.md`。
-
----
-
-## 5. 常用命令速查
-
+A: 加 `--legacy-peer-deps`：
 ```bash
-uv sync                        # 安装依赖
-uv run mkdocs serve            # 本地实时预览
-uv run mkdocs build --strict   # 严格构建校验
-uv run mkdocs build -f mkdocs.yml   # 指定配置文件构建
+npm install --legacy-peer-deps
 ```
 
-> 提示：`site/` 与 `.venv/` 是生成产物，已在 `.gitignore`（见仓库根 `.gitignore`）。
-> 若没有，可自行加两行：`site/`、`.venv/`。
+### Q: Mermaid 图不渲染？
+
+A: Vocs 原生支持 Mermaid（通过 `rehypeMermaid` 插件），无需额外配置。只需在 Markdown 中使用：
+
+````
+```mermaid
+flowchart LR
+  A --> B
+```
+````
+
+### Q: 如何修改 sidebar 导航？
+
+A: 编辑 `vocs.config.ts` 中的 `sidebar` 配置。
+
+### Q: 如何修改主题色/Logo？
+
+A: 编辑 `vocs.config.ts` 中的 `iconUrl`、`logoUrl` 等配置项。参见 [Vocs 配置文档](https://vocs.dev/docs/api/config)。
