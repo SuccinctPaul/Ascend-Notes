@@ -236,23 +236,23 @@ Roofline 是个"好模型，但你别当全部答案"：
 
 * Roofline 经典论文：Williams S., Waterman A., Patterson D., *Roofline: An Insightful Visual Performance Model for Multicore Architectures*, Communications of the ACM 52(4), 2009.
 
-  * eScholarship (UC Berkeley 官方存档，开放 PDF)：<https://escholarship.org/uc/item/78h8v7mr>
+  * eScholarship (UC Berkeley 官方存档，开放 PDF)：[https://escholarship.org/uc/item/78h8v7mr](https://escholarship.org/uc/item/78h8v7mr)
 
-  * ACM Digital Library (DOI 10.1145/1498765.1498785)：<https://dl.acm.org/doi/10.1145/1498765.1498785>
+  * ACM Digital Library (DOI 10.1145/1498765.1498785)：[https://dl.acm.org/doi/10.1145/1498765.1498785](https://dl.acm.org/doi/10.1145/1498765.1498785)
 
 * 华为昇腾 msProf 官方文档——其中"msProf 工具使用"中提到通过 MindStudio Insight 展示 **Roofline 瓶颈分析图**（可据此在昇腾工具链里看到实际的屋顶图）：
 
-  * <https://www.hiascend.cn/document/detail/zh/canncommercial/800/devaids/opdev/optool/atlasopdev_16_00851.html>
+  * [https://www.hiascend.cn/document/detail/zh/canncommercial/800/devaids/opdev/optool/atlasopdev_16_00851.html](https://www.hiascend.cn/document/detail/zh/canncommercial/800/devaids/opdev/optool/atlasopdev_16_00851.html)
 
 * 华为昇腾官方开发文章《Ascend C 算子优化实用技巧 04——Tiling 优化》（用"GM/HBM 带宽 vs L2Cache 带宽"的对比说明带宽瓶颈，适合印证本页的带宽墙理解）：
 
-  * <https://www.hiascend.com/developer/techArticles/20240920-1>
+  * [https://www.hiascend.com/developer/techArticles/20240920-1](https://www.hiascend.com/developer/techArticles/20240920-1)
 
 * NVIDIA Nsight Compute 官方——其分析报告自带基于 Roofline 的 SOL 分析规则，可作对照阅读：
 
-  * <https://developer.nvidia.com/nsight-compute>
+  * [https://developer.nvidia.com/nsight-compute](https://developer.nvidia.com/nsight-compute)
 
-  * <https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html>
+  * [https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html](https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html)
 
 > 注：本页出现的算力/带宽具体数值未写死，因随芯片型号而异；实操请以目标芯片官方规格书或工具实测为准（相关项已标注"待核验"）。
 
