@@ -34,7 +34,9 @@ export default defineConfig({
   description:
     '面向 0→1 新手的 NPU 知识库，以昇腾 Ascend NPU 为核心，涵盖硬件架构、LLM 算子、性能优化与 Profiling。',
   basePath: '/Ascend-Notes',
-  rootDir: 'docs',
+  // Config.resolve(options) 的第二个 pass 会强制把 rootDir 盖成 cwd。
+  // 所以不要改 rootDir，只改 srcDir：让 pagesDir = <cwd>/<srcDir>/<pages> 指向 docs/pages。
+  srcDir: 'docs',
   renderStrategy: 'full-static',
   markdown: {
     // 注意顺序：preprocess 要先跑（在 mdx-jsx 之前把语法冲突去掉），再跑 GFM。
