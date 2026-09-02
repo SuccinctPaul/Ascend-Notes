@@ -218,3 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 .my-env
+
+node_modules
+**/*.cpp-E
+**/*pages.gen.ts
