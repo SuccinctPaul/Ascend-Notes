@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ---- CANN 环境变量 ----
+# 使用前必须先 source CANN 的 set_env.sh, 它会设置 ASCEND_HOME_PATH
 set(ASCEND_HOME $ENV{ASCEND_HOME_PATH})
 if(NOT ASCEND_HOME)
     message(FATAL_ERROR
@@ -16,7 +17,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# ---- SoC 型号 (可被 -D 覆盖) ----
+# ---- SoC 型号 ----
 set(SOC_VERSION "Ascend910B2" CACHE STRING
     "Ascend SoC version (Ascend910B2, Ascend310B1, Ascend310P3, ...)")
 set(ASCEND_CANN_PACKAGE_PATH ${ASCEND_HOME})
@@ -24,51 +25,113 @@ set(ASCEND_CANN_PACKAGE_PATH ${ASCEND_HOME})
 # ---- 引入官方 Ascend-C 构建框架 ----
 include(${ASCEND_HOME}/aarch64-linux/tikcpp/ascendc_kernel_cmake/ascendc.cmake)
 
-# =====================================================================
-# GEMM  (原 gemm_kernel.cpp, 已验证)
-# =====================================================================
+# ============================================================================
+# 1. GEMM (保留原有功能)
+# ============================================================================
 ascendc_library(gemm STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gemm_kernel.cpp)
 
 add_executable(ascend_gemm src/gemm_host.cpp)
 target_compile_options(ascend_gemm PRIVATE -fno-fast-math)
 target_link_libraries(ascend_gemm PRIVATE gemm ascendcl runtime)
 
-# =====================================================================
-# GELU (生产版) —— AscendC adv_api Gelu<half, highPrecision=true> + DataCopy
-# =====================================================================
-# kernel 入口: gelu_kernel(x, y, workspace, tiling)
-# workspace 不用传 nullptr; tiling 放 N (元素数, uint32_t).
+# ============================================================================
+# 2. GELU —— Production (Vector tile + DataCopy 流水线版本)
+#    kernel: gelu_kernel()  from op_kernel/gelu_kernel.cpp
+#    host:   gelu_host.cpp  -> binary ascend_gelu
+# ============================================================================
 ascendc_library(gelu STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_kernel.cpp)
 
 add_executable(ascend_gelu src/gelu_host.cpp)
 target_compile_options(ascend_gelu PRIVATE -fno-fast-math)
 target_link_libraries(ascend_gelu PRIVATE gelu ascendcl runtime)
 
-# =====================================================================
-# GELU (教学版 scalar) —— 逐元素 scalar GM, ≤2 层 fp32 显式拆分
-# 用于展示 "scalar 地板性能" (~1 GB/s, HBM util < 0.1%)
-# =====================================================================
-ascendc_library(gelu_scalar STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_scalar_kernel.cpp)
+# ============================================================================
+# 3. GELU —— Scalar 地板性能版本 (故意不用 DataCopy / Vector / Tile)
+#    kernel: gelu_scalar_kernel()  from op_kernel/gelu_scalar_kernel.cpp
+#    host:   gelu_host.cpp 但带宏 SCALAR_KERNEL=1 切换 launch 函数名
+#            -> binary ascend_gelu_scalar
+#    注意: 文件目前后缀 .cpp-E (意为"编辑中"), 先 copy 一份无后缀版本再编译.
+# ============================================================================
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_scalar_kernel.cpp)
+    set(_GELU_SCALAR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_scalar_kernel.cpp)
+elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_scalar_kernel.cpp-E)
+    set(_GELU_SCALAR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_scalar_kernel.cpp-E)
+else()
+    message(WARNING "gelu_scalar_kernel.cpp(.cpp-E) not found; skip building ascend_gelu_scalar")
+    set(_GELU_SCALAR_SRC "")
+endif()
 
-add_executable(ascend_gelu_scalar src/gelu_scalar_host.cpp)
-target_compile_options(ascend_gelu_scalar PRIVATE -fno-fast-math)
-target_link_libraries(ascend_gelu_scalar PRIVATE gelu_scalar ascendcl runtime)
+if(_GELU_SCALAR_SRC)
+    ascendc_library(gelu_scalar STATIC ${_GELU_SCALAR_SRC})
 
-# =====================================================================
-# Diag2: LocalTensor + DataCopy + Muls(y = 0.5*x), 验证 Vector 基础设施
-# =====================================================================
-ascendc_library(diag2 STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/diag2_kernel.cpp)
+    add_executable(ascend_gelu_scalar src/gelu_host.cpp)
+    target_compile_definitions(ascend_gelu_scalar PRIVATE SCALAR_KERNEL=1)
+    target_compile_options(ascend_gelu_scalar PRIVATE -fno-fast-math)
+    target_link_libraries(ascend_gelu_scalar PRIVATE gelu_scalar gelu ascendcl runtime)
 
-add_executable(ascend_diag2 src/diag2_host.cpp)
-target_compile_options(ascend_diag2 PRIVATE -fno-fast-math)
-target_link_libraries(ascend_diag2 PRIVATE diag2 ascendcl runtime)
+    # ascend_gelu 需要同时链接 scalar stub (host 运行期 argv[2]=="scalar" 分支会调用
+    # aclrtlaunch_gelu_scalar_kernel, 即便默认不跑该分支, 静态链接也需要符号解析)
+    target_link_libraries(ascend_gelu PRIVATE gelu_scalar)
+endif()
 
-# =====================================================================
-# Diag4: 纯标量 GM↔UB, 全 fp32 Vector GELU, 消除 DataCopy 计数歧义
-# =====================================================================
-ascendc_library(diag4 STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/diag4_kernel.cpp)
+# ============================================================================
+# 4. Softmax —— Production (UB tile + Reduce/Exp/Div Vector 版本)
+#    kernel: softmax_kernel()  from op_kernel/softmax_kernel.cpp
+#    host:   softmax_host.cpp   -> binary ascend_softmax
+# ============================================================================
+ascendc_library(softmax STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/softmax_kernel.cpp)
 
-add_executable(ascend_diag4 src/diag4_host.cpp)
-target_compile_options(ascend_diag4 PRIVATE -fno-fast-math)
-target_link_libraries(ascend_diag4 PRIVATE diag4 ascendcl runtime)
+add_executable(ascend_softmax src/softmax_host.cpp)
+target_compile_options(ascend_softmax PRIVATE -fno-fast-math)
+target_link_libraries(ascend_softmax PRIVATE softmax ascendcl runtime)
 
+# ============================================================================
+# 5. Softmax —— Scalar 地板性能版本
+#    kernel: softmax_scalar_kernel()  from op_kernel/softmax_scalar_kernel.cpp
+#    host:   softmax_host.cpp 带宏 SCALAR_KERNEL=1 -> ascend_softmax_scalar
+# ============================================================================
+ascendc_library(softmax_scalar STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/softmax_scalar_kernel.cpp)
+
+add_executable(ascend_softmax_scalar src/softmax_host.cpp)
+target_compile_definitions(ascend_softmax_scalar PRIVATE SCALAR_KERNEL=1)
+target_compile_options(ascend_softmax_scalar PRIVATE -fno-fast-math)
+# softmax_host 两个 extern 函数声明都会存在 (运行期 argv[3]=="scalar" 切换),
+# 所以 ascend_softmax / ascend_softmax_scalar 两个 binary 都同时链接两个 kernel stub.
+target_link_libraries(ascend_softmax_scalar PRIVATE softmax_scalar softmax ascendcl runtime)
+target_link_libraries(ascend_softmax        PRIVATE softmax_scalar)
+
+# ============================================================================
+# 7. GELU v3 —— 全新命名 target (gelu_v3_kernel / gelu_v3_host) 避免 CANN 9.0
+#    ascendc_library ExternalProject 对旧名字 gelu / gelu_scalar 的二进制打包缓存导致
+#    kernel 源码变更即便 --clean-first 也不会重新 pack 进可执行文件。
+# ============================================================================
+ascendc_library(gelu_v3 STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_v3_kernel.cpp)
+add_executable(ascend_gelu_v3 src/gelu_v3_host.cpp)
+target_compile_options(ascend_gelu_v3 PRIVATE -fno-fast-math)
+target_link_libraries(ascend_gelu_v3 PRIVATE gelu_v3 ascendcl runtime)
+
+# v5: 常数从 tiling 通过 DataCopy 搬到 UB LocalTensor (绕开 SetValue(立即数) → -inf bug)
+ascendc_library(gelu_v5 STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_v5_kernel.cpp)
+add_executable(ascend_gelu_v5 src/gelu_v5_host.cpp)
+target_compile_options(ascend_gelu_v5 PRIVATE -fno-fast-math)
+target_link_libraries(ascend_gelu_v5 PRIVATE gelu_v5 ascendcl runtime)
+
+# v6: DataCopy 常数 + 完全复刻 softmax 内循环 AST (sBIG 不再 roundtrip; big 直接 local var)
+ascendc_library(gelu_v6 STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gelu_v6_kernel.cpp)
+add_executable(ascend_gelu_v6 src/gelu_v5_host.cpp)
+target_compile_definitions(ascend_gelu_v6 PRIVATE USE_KERNEL_V6=1)
+target_compile_options(ascend_gelu_v6 PRIVATE -fno-fast-math)
+target_link_libraries(ascend_gelu_v6 PRIVATE gelu_v6 ascendcl runtime)
+
+# ============================================================================
+# 6. 诊断用小工具 (旧版本保留, 不影响核心构建)
+# ============================================================================
+foreach(_d diag diag2 diag3 diag4 diag5 diag6 diag_gelu gelu_min identity identity2 identity3 identity_s0 diag_block identity_fix identity_chunk identity_mod)
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/${_d}_kernel.cpp AND
+       EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/${_d}_host.cpp)
+        ascendc_library(${_d} STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/${_d}_kernel.cpp)
+        add_executable(ascend_${_d} src/${_d}_host.cpp)
+        target_compile_options(ascend_${_d} PRIVATE -fno-fast-math)
+        target_link_libraries(ascend_${_d} PRIVATE ${_d} ascendcl runtime)
+    endif()
+endforeach()

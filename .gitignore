@@ -220,4 +220,6 @@ __marimo__/
 
 .my-env
 
+node_modules
+**/*.cpp-E
 **/*pages.gen.ts
