@@ -24,7 +24,15 @@ GELU 是逐元素算子, 在 TileLang-Ascend 上属于 **Vector 核** (Scope("M"
     里已经 `pip install cython`).
 """
 
-from __future__ import annotations
+# ⚠ IMPORTANT: 本文件 **不要** 加 `from __future__ import annotations`。
+# TileLang-Ascend v0.1.1.010 自带的 TVM script parser 要求 `@T.prim_func` 的参数
+# 注解必须是**实际对象** (T.Tensor(...) 返回的 Buffer)；如果打开 future annotations，
+# 所有注解都会被保留成 Python str → parser 抛
+#   TVMError: expected Object but got str (type_code 11 vs 8)
+# 见 docs/ops/05-gelu.md §8.6.4 常见坑 #TL-5a。
+# 配合下方 gelu_activation 中的 N/BLOCK/dtype → mod.__dict__ 注入，
+# `def main(X: T.Tensor((N,), dtype), Y: T.Tensor((N,), dtype))` 在编译期 **立刻**
+# 被 Python 求值为两个 Buffer 参数对象，恰好进入 parser 的正确路径。
 
 import os
 # ⚠ 必须在 import torch / torch_npu 之前设置, 否则 CANN TBE 的 TVM 注册会覆盖
@@ -76,7 +84,7 @@ def gelu_activation(N: int, BLOCK: int, dtype: str = "float16"):
     _mod.__dict__["dtype"] = dtype
     try:
         @T.prim_func
-        def main(X: "T.Tensor((N,), dtype)", Y: "T.Tensor((N,), dtype)"):
+        def main(X: T.Tensor((N,), dtype), Y: T.Tensor((N,), dtype)):
             with T.Kernel(num_blocks) as cid:
                 # ---- UB 缓冲规划: 5 × BLOCK fp16 = 10KB << 192KB UB ----
                 # scope 语义:  T.alloc_ub  → "shared"  ↔ AscendCopy 允许 global↔shared DMA

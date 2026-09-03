@@ -224,7 +224,9 @@ def _annotate_tl_error(e: Exception) -> Exception:
                                "No registered target detector",
                                "Device_Subprocess_Startup_Timeout",
                                "507033", "don't know how to convert type",
-                               "NameError: name '")):
+                               "NameError: name '",
+                               "expected Object but got str",  # #TL-5a: future annotations
+                               "DiagnosticError")):
         try:
             e.args = (f"{msg}{_TL_ERR_HINT}", *e.args[1:])
         except Exception:
