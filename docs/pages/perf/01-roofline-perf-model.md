@@ -1,7 +1,7 @@
 # 01 · 性能模型与 Roofline
 
-> 面向 0→1 新手：怎么"算"一个算子该有多快，怎么一眼看出它是**算不快**还是**数据喂不饱**。
-> 本文最核心就三个词：**计算强度 / 算术强度**、**理论峰值**、**带宽墙**。
+`>` 面向 0→1 新手：怎么"算"一个算子该有多快，怎么一眼看出它是**算不快**还是**数据喂不饱**。
+`>` 本文最核心就三个词：**计算强度 / 算术强度**、**理论峰值**、**带宽墙**。
 
 ***
 
@@ -40,7 +40,7 @@
 其中**计算强度**口径要跟 Roofline 论文一致：指"**每字节 DRAM（GM/HBM）流量能换多少次 FLOP**"，而不是"寄存器到寄存器的算术强度"。这一点很关键，
 因为它把"内存优化"也自然装进了模型（见后）。
 
-> 记法统一：`I = FLOPs ÷ Bytes(从 GM 搬的量)`。
+`>` 记法统一：`I = FLOPs ÷ Bytes(从 GM 搬的量)`。
 
 ***
 
@@ -95,9 +95,9 @@ Attainable(可达到的性能) ≤ min( P , B × I )
 ```mermaid
 flowchart LR
     subgraph roof["Roofline（屋顶）— log-log 图"]
-        slope["斜线段：性能 = 带宽 B × I<br/>（带宽受限区 / 带宽墙）"]
-        flat["水平段：性能 = 算力峰值 P<br/>（计算受限区 / 算力天花板）"]
-        ridge["山脊点 I_ridge = P / B<br/>（两侧交界）"]
+        slope["斜线段：性能 = 带宽 B × I （带宽受限区 / 带宽墙）"]
+        flat["水平段：性能 = 算力峰值 P （计算受限区 / 算力天花板）"]
+        ridge["山脊点 I_ridge = P / B （两侧交界）"]
         point["你算子的位置 I"]
     end
     slope -- "沿 I 增大向上" --> flat
@@ -117,7 +117,7 @@ flowchart LR
 
 ### 3）怎么自己手算"峰不峰值、带宽多少"
 
-> 以下两个参考口径必须在**装有 CANN 的昇腾环境**里用工具验证，下面的值不要当作本机数值直接引用（不同芯片/型号/频率差异很大）。
+`>` 以下两个参考口径必须在**装有 CANN 的昇腾环境**里用工具验证，下面的值不要当作本机数值直接引用（不同芯片/型号/频率差异很大）。
 
 * **算力峰值**：`AI Core 数 × 每 Core 每周期 MAC × 主频 × 2`。昇腾 910B 系列适合用它作为量级估计；**具体数值需查询目标芯片的官方规格书或跑 micro-benchmark，标"待核验"**。
 
@@ -142,7 +142,7 @@ flowchart LR
 | `examples/tilelang_ascend/` | 显式 L1/L0C + 调度 | 显式 tiling，最贴近 Cube | 点最接近屋顶          |
 | `examples/ascend_c/`        | 逐元素、最细         | 需手写全套流水            | 以字节级控制可逼近屋顶     |
 
-> 这份对比会在 `05-dsl-benchmark-analysis.md` 里用仓库实测数字展开解读。
+`>` 这份对比会在 `05-dsl-benchmark-analysis.md` 里用仓库实测数字展开解读。
 
 ### 5）Roofline 的两种"天花板"之外：还有次级天花板
 
@@ -174,8 +174,8 @@ Roofline 论文还指出：即便在算力这一段，也可能因为"没有用 
   因为 128 太小、且 tiling 很浅，I 很容易落在拐点左侧 → 带宽受限（推进方向：加大 tile、加流水、提高复用）。
 ```
 
-> 做完你会发现：**哪怕只是把 tile 从"整张一次"改成"分小块多级流水"，I 都会明显右移**（因为 A/B 在片上被复用的次数变多了）。
-> 这就是 `02` 篇一切动作的起点：一切优化本质上都在把 I 往右推。
+`>` 做完你会发现：**哪怕只是把 tile 从"整张一次"改成"分小块多级流水"，I 都会明显右移**（因为 A/B 在片上被复用的次数变多了）。
+`>` 这就是 `02` 篇一切动作的起点：一切优化本质上都在把 I 往右推。
 
 ### 7）Roofline 的边界：它不告诉你的事
 
@@ -205,10 +205,10 @@ Roofline 是个"好模型，但你别当全部答案"：
 
 1. **算一个算子**：`I = FLOPs ÷ Bytes`，先算出每个字节换几次计算。
 2. **画屋顶**：`min(算力峰值 P, 带宽 B × I)` 那条折线。
-3. **定位**：`I < P/B` → 带宽受限（去减搬运/加复用）；`I > P/B` → 计算受限（去提 Cube/Vector 利用率）；够不到屋顶 → 还有优化缝隙。
+3. **定位**：`I ` P/B` → 带宽受限（去减搬运/加复用）；`I ` P/B` → 计算受限（去提 Cube/Vector 利用率）；够不到屋顶 → 还有优化缝隙。
 4. 本仓库的 GEMM（128³）I ≈ 21，偏小，属**带宽敏感**；把 tile 放大、加 multi-stage 流水、数据在片上多复用，就是要把 I 往右推。
 
-> 记住一句话：**先分清是"算得慢"还是"喂不饱"，再动手优化。**
+`>` 记住一句话：**先分清是"算得慢"还是"喂不饱"，再动手优化。**
 
 ***
 
@@ -232,27 +232,27 @@ Roofline 是个"好模型，但你别当全部答案"：
 
 ## 参考资料
 
-> 以下链接均为公开、可核验的来源。请在不通网络时打开核对。
+`>` 以下链接均为公开、可核验的来源。请在不通网络时打开核对。
 
 * Roofline 经典论文：Williams S., Waterman A., Patterson D., *Roofline: An Insightful Visual Performance Model for Multicore Architectures*, Communications of the ACM 52(4), 2009.
 
-  * eScholarship (UC Berkeley 官方存档，开放 PDF)：<https://escholarship.org/uc/item/78h8v7mr>
+  * eScholarship (UC Berkeley 官方存档，开放 PDF)：https://escholarship.org/uc/item/78h8v7mr
 
-  * ACM Digital Library (DOI 10.1145/1498765.1498785)：<https://dl.acm.org/doi/10.1145/1498765.1498785>
+  * ACM Digital Library (DOI 10.1145/1498765.1498785)：https://dl.acm.org/doi/10.1145/1498765.1498785
 
 * 华为昇腾 msProf 官方文档——其中"msProf 工具使用"中提到通过 MindStudio Insight 展示 **Roofline 瓶颈分析图**（可据此在昇腾工具链里看到实际的屋顶图）：
 
-  * <https://www.hiascend.cn/document/detail/zh/canncommercial/800/devaids/opdev/optool/atlasopdev_16_00851.html>
+  * https://www.hiascend.cn/document/detail/zh/canncommercial/800/devaids/opdev/optool/atlasopdev_16_00851.html
 
 * 华为昇腾官方开发文章《Ascend C 算子优化实用技巧 04——Tiling 优化》（用"GM/HBM 带宽 vs L2Cache 带宽"的对比说明带宽瓶颈，适合印证本页的带宽墙理解）：
 
-  * <https://www.hiascend.com/developer/techArticles/20240920-1>
+  * https://www.hiascend.com/developer/techArticles/20240920-1
 
 * NVIDIA Nsight Compute 官方——其分析报告自带基于 Roofline 的 SOL 分析规则，可作对照阅读：
 
-  * <https://developer.nvidia.com/nsight-compute>
+  * https://developer.nvidia.com/nsight-compute
 
-  * <https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html>
+  * https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html
 
-> 注：本页出现的算力/带宽具体数值未写死，因随芯片型号而异；实操请以目标芯片官方规格书或工具实测为准（相关项已标注"待核验"）。
+`>` 注：本页出现的算力/带宽具体数值未写死，因随芯片型号而异；实操请以目标芯片官方规格书或工具实测为准（相关项已标注"待核验"）。
 

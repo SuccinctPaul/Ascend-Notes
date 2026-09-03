@@ -1,7 +1,7 @@
 # 06 · GQA（Grouped Query Attention）与 KV Cache
 
-> 目标读者：已经理解自注意力，想搞懂"推理时注意力为什么是显存和算力的重头"，以及 GQA/KV Cache 怎么救场。
-> 本文讲 GQA 是什么、KV Cache 是什么、它们如何省显存，以及这对 NPU 推断的影响。
+`>` 目标读者：已经理解自注意力，想搞懂"推理时注意力为什么是显存和算力的重头"，以及 GQA/KV Cache 怎么救场。
+`>` 本文讲 GQA 是什么、KV Cache 是什么、它们如何省显存，以及这对 NPU 推断的影响。
 
 ---
 
@@ -25,7 +25,7 @@ TL;DR：KV Cache 是把算过的钥匙(Key)/值(Value)存起来别再重算；
 ```
 MHA:  H 个 query 头  ×  H 个独立的 K/V 头
 MQA:  H 个 query 头  ×  1 个共享 K/V 头         （Multi-Query Attention）
-GQA:  H 个 query 头  ×  G 个共享 K/V 头（1<G<H）  （Grouped Query Attention）
+GQA:  H 个 query 头  ×  G 个共享 K/V 头（`1<G<H`）  （Grouped Query Attention）
 ```
 
 GQA 是 MHA 和 MQA 的**中间态**：把 H 个 query 头分成 G 组，每组共享一个 K/V 头。当 `G=H` 时退化为 MHA，当 `G=1` 时退化为 MQA。
@@ -34,9 +34,9 @@ GQA 是 MHA 和 MQA 的**中间态**：把 H 个 query 头分成 G 组，每组�
 |---|---|---|---|
 | MHA | H | 不省（基线） | 基准精度 |
 | MQA | 1 | 最多 | 可能微降 |
-| GQA | G（取 1<G<H） | 显著 | 接近 MHA |
+| GQA | G（取 `1<G<H`） | 显著 | 接近 MHA |
 
-> 人话：MHA 是每人一间办公室，MQA 是所有人挤一间，GQA 是"几个小组共用一间"——折腾合适就有兼顾。
+`>` 人话：MHA 是每人一间办公室，MQA 是所有人挤一间，GQA 是"几个小组共用一间"——折腾合适就有兼顾。
 
 ### 2.2 KV Cache 是什么
 
@@ -78,7 +78,7 @@ KV 大小 ≈ 2 × 层数 × (K/V头数) × 每头维度 × 序列长度 × 字�
 
 GQA 用"**更少的 K/V 头**"直接按比例砍掉要缓存和要读取的 KV 数据量。比如 H=32、G=4，KV 头数从 32 降到 4，KV Cache 和注意力的 KV 读取带宽就变成原来的 **1/8**。GQA 论文证明这种压缩下精度损失很小，因此成了 LLaMA-2/3 等主流模型的标配。
 
-> 人话：KV Cache 解决"别重算、别老读 GM"的问题；GQA 解决"缓存太占显存、KV 读取太宽"的问题。一个是省算，一个是省存+省带宽。
+`>` 人话：KV Cache 解决"别重算、别老读 GM"的问题；GQA 解决"缓存太占显存、KV 读取太宽"的问题。一个是省算，一个是省存+省带宽。
 
 ---
 
@@ -156,7 +156,7 @@ NPU 的注意力常被**带宽**（读写 KV）卡住，而不是算力。GQA �
 
 KV Cache 随序列增长、且长度往往不固定（batch 内各请求长短不一），直接在 GM 里连续开一块大内存容易**碎片化 / 浪费**。近年工程解法是**分页注意力（PagedAttention）**：按固定大小"页"来分配和管理 KV Cache，像操作系统分页一样按需挂接，从而支持更大的 batch 和更长的序列。它对 NPU 的意义在于：**把"搬运粒度"和"分配粒度"解耦**——按页预取、按页复用，访问模式更规整，也更容易与 Cube 的分块对齐。
 
-> 人话：KV Cache 是"越写越大、长短不一"的账本，直接整块预留会浪费；分成一页页记账，既能精准分配、又方便整页搬上片复用。
+`>` 人话：KV Cache 是"越写越大、长短不一"的账本，直接整块预留会浪费；分成一页页记账，既能精准分配、又方便整页搬上片复用。
 
 ---
 
@@ -186,7 +186,7 @@ flowchart TD
     C2 --> NOTE["省下的显存可换更长上下文或更大 batch"]
 ```
 
-> 人话：KV Cache 的"体积"里乘了一个 `KV头数`，GQA 把这个乘数整体缩小 G 倍，立竿见影。
+`>` 人话：KV Cache 的"体积"里乘了一个 `KV头数`，GQA 把这个乘数整体缩小 G 倍，立竿见影。
 
 ### 一个 GQA 头共享的手算（理解"÷G"从哪来）
 
@@ -249,4 +249,4 @@ flowchart LR
   https://huggingface.co/docs/transformers/en/llm_optims/paged_attention#kv-cache
   （注：该子页为 llm_optims 的 KV 缓存小节，URL 以官方文档当前结构为准。）
 
-> 说明：以上 HuggingFace 链接为官方文档常规地址；若主版本更新导致子页路径调整，请从 https://huggingface.co/docs/transformers/en/llm_optims 导航进入。
+`>` 说明：以上 HuggingFace 链接为官方文档常规地址；若主版本更新导致子页路径调整，请从 https://huggingface.co/docs/transformers/en/llm_optims 导航进入。

@@ -1,0 +1,121 @@
+---
+title: 构建与部署说明
+---
+
+# 构建与部署说明
+
+本仓库使用 [Vocs](https://vocs.dev)（React + Vite 驱动的静态文档生成器）构建文档站点，部署到 GitHub Pages。
+
+---
+
+## TL;DR
+
+```bash
+npm install --legacy-peer-deps   # 安装依赖
+npm run dev                      # 本地预览 (http://localhost:5173)
+npm run build                    # 构建静态站点 → dist/
+```
+
+---
+
+## 前置条件
+
+1. **Node.js 22+**（推荐用 [fnm](https://github.com/Schniz/fnm) 或 [nvm](https://github.com/nvm-sh/nvm) 管理）
+2. **npm**（随 Node.js 安装）
+
+## 1. 本地预览
+
+```bash
+npm install --legacy-peer-deps
+npm run dev
+```
+
+浏览器打开 `http://localhost:5173`，修改 `src/pages/` 下的文件会自动热刷新。
+
+## 2. 本地构建
+
+```bash
+npm run build
+```
+
+构建产物在 `dist/public/` 目录（纯静态 HTML/JS/CSS），可直接用 `npm run preview` 预览构建结果。
+
+> `vocs.config.ts` 中设置了 `renderStrategy: 'full-static'`，确保输出纯静态文件以适配 GitHub Pages。
+
+## 3. 部署到 GitHub Pages
+
+### 3.1 GitHub 仓库设置
+
+1. 打开仓库 **Settings → Pages**
+2. **Source** 选择 **GitHub Actions**（不是 Deploy from a branch）
+3. 保存
+
+### 3.2 自动部署
+
+仓库已配置 [GitHub Actions workflow](https://github.com/SuccinctPaul/Ascend-Notes/blob/main/.github/workflows/deploy-docs.yml)，
+每次 push 到 `main` 分支会自动：
+
+1. 安装 Node.js 22 + npm 依赖
+2. 执行 `npx vocs build` 构建静态站点
+3. 将 `dist/` 上传为 Pages artifact
+4. 部署到 GitHub Pages
+
+部署完成后，站点地址为：
+```
+https://succinctpaul.github.io/Ascend-Notes/
+```
+
+> **注意**：`vocs.config.ts` 中的 `basePath: '/Ascend-Notes'` 必须与你的仓库名一致。
+> 如果你把仓库改名为 `my-docs`，`basePath` 也要改成 `'/my-docs'`。
+
+### 3.3 手动触发部署
+
+在 GitHub 仓库的 **Actions** 页，找到 "Deploy docs to GitHub Pages" workflow，点 **Run workflow** 即可手动触发。
+
+## 4. 项目结构
+
+```
+Ascend-Notes/
+├── .github/workflows/deploy-docs.yml   # GitHub Actions 部署脚本
+├── docs/                                # Vocs 根目录
+│   ├── pages/                           # 文档页面（文件路由）
+│   │   ├── index.mdx                    # 首页（landing 布局）
+│   │   ├── hardware/                    # 一、NPU 体系化架构
+│   │   ├── ops/                         # 二、LLM 优化算子
+│   │   ├── perf/                        # 三、性能优化与 Profiling
+│   │   ├── reference/                   # 术语表
+│   │   └── deployment.mdx              # 本文件
+│   └── public/                          # 静态资源（图片等）
+├── src/pages/                           # 软链接到 docs/pages（Vocs 搜索索引需要）
+├── vocs.config.ts                       # Vocs 配置（sidebar、socials、editLink 等）
+├── package.json                         # npm 依赖与脚本
+└── .gitignore
+```
+
+## 5. 常见问题
+
+### Q: `npm install` 报 peer dependency 冲突？
+
+A: 加 `--legacy-peer-deps`：
+```bash
+npm install --legacy-peer-deps
+```
+
+### Q: Mermaid 图不渲染？
+
+A: Vocs 原生支持 Mermaid（通过 `rehypeMermaid` 插件），无需额外配置。只需在 Markdown 中使用：
+
+````
+```mermaid
+flowchart LR
+  A --> B
+```
+````
+
+### Q: 如何修改 sidebar 导航？
+
+A: 编辑 `vocs.config.ts` 中的 `sidebar` 配置。
+
+### Q: 如何修改主题色/Logo？
+
+A: 编辑 `vocs.config.ts` 中的 `iconUrl`、`logoUrl` 等配置项。参见 [Vocs 配置文档](https://vocs.dev/docs/api/config)。
