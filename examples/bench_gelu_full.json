@@ -1,0 +1,606 @@
+{
+  "SoC": "Ascend 910B2",
+  "CANN_version": "9.0.0",
+  "device_id_logical": 0,
+  "ascendc_which": "both",
+  "repeats_per_size": 15,
+  "sizes": [
+    65536,
+    524288,
+    1048576,
+    8388608,
+    33554432,
+    67108864,
+    134217728
+  ],
+  "THEORETICAL_PEAK_TFLOPS_FP16_VECTOR": 280.0,
+  "HBM_TBPS_QUOTED": 1.6,
+  "FLOPS_PER_ELEMENT": 11,
+  "FLOPs_Intensity_note": "FLOPs_per_elem * N / (2 * elem_bytes * N) → fp16 theoretical I ≈ 11/4 = 2.75 FLOP/Byte (memory-bound)",
+  "numpy_cpu_fp32": [
+    {
+      "N": 65536,
+      "dtype": "float32",
+      "ms_best_ms": 1.8257,
+      "GBps": 0.287,
+      "GFLOPS": 0.39,
+      "AI": "—"
+    },
+    {
+      "N": 524288,
+      "dtype": "float32",
+      "ms_best_ms": 14.3661,
+      "GBps": 0.292,
+      "GFLOPS": 0.4,
+      "AI": "—"
+    },
+    {
+      "N": 1048576,
+      "dtype": "float32",
+      "ms_best_ms": 30.9693,
+      "GBps": 0.271,
+      "GFLOPS": 0.37,
+      "AI": "—"
+    },
+    {
+      "N": 8388608,
+      "dtype": "float32",
+      "ms_best_ms": 268.9078,
+      "GBps": 0.25,
+      "GFLOPS": 0.34,
+      "AI": "—"
+    },
+    {
+      "N": 33554432,
+      "dtype": "float32",
+      "ms_best_ms": 1071.088,
+      "GBps": 0.251,
+      "GFLOPS": 0.34,
+      "AI": "—"
+    },
+    {
+      "N": 67108864,
+      "dtype": "float32",
+      "ms_best_ms": 3459.753,
+      "GBps": 0.155,
+      "GFLOPS": 0.21,
+      "AI": "—"
+    },
+    {
+      "N": 134217728,
+      "dtype": "float32",
+      "ms_best_ms": 4104.2821,
+      "GBps": 0.262,
+      "GFLOPS": 0.36,
+      "AI": "—"
+    }
+  ],
+  "triton_npu_fp16": [
+    {
+      "N": 65536,
+      "dtype": "fp16",
+      "ms_best_ms": 0.2557,
+      "GBps": 1.025,
+      "GFLOPS": 2.82,
+      "max_abs": 6.103515625e-05
+    },
+    {
+      "N": 524288,
+      "dtype": "fp16",
+      "ms_best_ms": 0.246,
+      "GBps": 8.525,
+      "GFLOPS": 23.44,
+      "max_abs": 6.103515625e-05
+    },
+    {
+      "N": 1048576,
+      "dtype": "fp16",
+      "ms_best_ms": 0.2527,
+      "GBps": 16.6,
+      "GFLOPS": 45.65,
+      "max_abs": 6.103515625e-05
+    },
+    {
+      "N": 8388608,
+      "dtype": "fp16",
+      "ms_best_ms": 0.4608,
+      "GBps": 72.812,
+      "GFLOPS": 200.23,
+      "max_abs": 6.103515625e-05
+    },
+    {
+      "N": 33554432,
+      "dtype": "fp16",
+      "ms_best_ms": 1.354,
+      "GBps": 99.125,
+      "GFLOPS": 272.59,
+      "max_abs": 6.103515625e-05
+    },
+    {
+      "N": 67108864,
+      "dtype": "fp16",
+      "ms_best_ms": 2.2437,
+      "GBps": 119.641,
+      "GFLOPS": 329.01,
+      "max_abs": 6.103515625e-05
+    },
+    {
+      "N": 134217728,
+      "dtype": "fp16",
+      "ms_best_ms": 2.5207,
+      "GBps": 212.986,
+      "GFLOPS": 585.71,
+      "max_abs": 6.103515625e-05
+    }
+  ],
+  "ascendc_npu_fp16": {
+    "ascendc_production": [
+      {
+        "N": 65536,
+        "dtype": "fp16",
+        "ms_best_ms": 5.4944,
+        "GBps": 0.048,
+        "GFLOPS": 0.13,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 524288,
+        "dtype": "fp16",
+        "ms_best_ms": 39.5761,
+        "GBps": 0.053,
+        "GFLOPS": 0.15,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 1048576,
+        "dtype": "fp16",
+        "ms_best_ms": 78.6822,
+        "GBps": 0.053,
+        "GFLOPS": 0.15,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 8388608,
+        "dtype": "fp16",
+        "ms_best_ms": 623.634,
+        "GBps": 0.054,
+        "GFLOPS": 0.15,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 33554432,
+        "dtype": "fp16",
+        "ms_best_ms": 2492.96,
+        "GBps": 0.054,
+        "GFLOPS": 0.15,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 67108864,
+        "dtype": "fp16",
+        "ms_best_ms": 4995.71,
+        "GBps": 0.054,
+        "GFLOPS": 0.15,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 134217728,
+        "dtype": "fp16",
+        "ms_best_ms": 9967.93,
+        "GBps": 0.054,
+        "GFLOPS": 0.15,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      }
+    ],
+    "ascendc_scalar": [
+      {
+        "N": 65536,
+        "dtype": "fp16",
+        "ms_best_ms": 5.6396,
+        "GBps": 0.046,
+        "GFLOPS": 0.13,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 524288,
+        "dtype": "fp16",
+        "ms_best_ms": 40.8206,
+        "GBps": 0.051,
+        "GFLOPS": 0.14,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 1048576,
+        "dtype": "fp16",
+        "ms_best_ms": 80.8522,
+        "GBps": 0.052,
+        "GFLOPS": 0.14,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 8388608,
+        "dtype": "fp16",
+        "ms_best_ms": 642.408,
+        "GBps": 0.052,
+        "GFLOPS": 0.14,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 33554432,
+        "dtype": "fp16",
+        "ms_best_ms": 2572.9,
+        "GBps": 0.052,
+        "GFLOPS": 0.14,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 67108864,
+        "dtype": "fp16",
+        "ms_best_ms": 5134.2,
+        "GBps": 0.052,
+        "GFLOPS": 0.14,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      },
+      {
+        "N": 134217728,
+        "dtype": "fp16",
+        "ms_best_ms": 10268.0,
+        "GBps": 0.052,
+        "GFLOPS": 0.14,
+        "max_abs": 0.00012207,
+        "pass_flag": true
+      }
+    ]
+  },
+  "roofline_points": [
+    {
+      "label": "NumPy_ref_CPU",
+      "N": 65536,
+      "dtype": "float32",
+      "GFLOPS": 0.39,
+      "GBps": 0.287,
+      "intensity_FLOP_per_Byte": 1.3589,
+      "roofline_predicted_GFLOPS": 2174.22,
+      "efficiency_wrt_roofline": 0.0002,
+      "HBM_util_pct": 0.018,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "NumPy_ref_CPU",
+      "N": 524288,
+      "dtype": "float32",
+      "GFLOPS": 0.4,
+      "GBps": 0.292,
+      "intensity_FLOP_per_Byte": 1.3699,
+      "roofline_predicted_GFLOPS": 2191.78,
+      "efficiency_wrt_roofline": 0.0002,
+      "HBM_util_pct": 0.018,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "NumPy_ref_CPU",
+      "N": 1048576,
+      "dtype": "float32",
+      "GFLOPS": 0.37,
+      "GBps": 0.271,
+      "intensity_FLOP_per_Byte": 1.3653,
+      "roofline_predicted_GFLOPS": 2184.5,
+      "efficiency_wrt_roofline": 0.0002,
+      "HBM_util_pct": 0.017,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "NumPy_ref_CPU",
+      "N": 8388608,
+      "dtype": "float32",
+      "GFLOPS": 0.34,
+      "GBps": 0.25,
+      "intensity_FLOP_per_Byte": 1.36,
+      "roofline_predicted_GFLOPS": 2176.0,
+      "efficiency_wrt_roofline": 0.0002,
+      "HBM_util_pct": 0.016,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "NumPy_ref_CPU",
+      "N": 33554432,
+      "dtype": "float32",
+      "GFLOPS": 0.34,
+      "GBps": 0.251,
+      "intensity_FLOP_per_Byte": 1.3546,
+      "roofline_predicted_GFLOPS": 2167.33,
+      "efficiency_wrt_roofline": 0.0002,
+      "HBM_util_pct": 0.016,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "NumPy_ref_CPU",
+      "N": 67108864,
+      "dtype": "float32",
+      "GFLOPS": 0.21,
+      "GBps": 0.155,
+      "intensity_FLOP_per_Byte": 1.3548,
+      "roofline_predicted_GFLOPS": 2167.74,
+      "efficiency_wrt_roofline": 0.0001,
+      "HBM_util_pct": 0.01,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "NumPy_ref_CPU",
+      "N": 134217728,
+      "dtype": "float32",
+      "GFLOPS": 0.36,
+      "GBps": 0.262,
+      "intensity_FLOP_per_Byte": 1.374,
+      "roofline_predicted_GFLOPS": 2198.47,
+      "efficiency_wrt_roofline": 0.0002,
+      "HBM_util_pct": 0.016,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "Triton_Ascend_910B2",
+      "N": 65536,
+      "dtype": "fp16",
+      "GFLOPS": 2.82,
+      "GBps": 1.025,
+      "intensity_FLOP_per_Byte": 2.7512,
+      "roofline_predicted_GFLOPS": 4401.95,
+      "efficiency_wrt_roofline": 0.0006,
+      "HBM_util_pct": 0.064,
+      "Vector_peak_util_pct": 0.001
+    },
+    {
+      "label": "Triton_Ascend_910B2",
+      "N": 524288,
+      "dtype": "fp16",
+      "GFLOPS": 23.44,
+      "GBps": 8.525,
+      "intensity_FLOP_per_Byte": 2.7496,
+      "roofline_predicted_GFLOPS": 4399.3,
+      "efficiency_wrt_roofline": 0.0053,
+      "HBM_util_pct": 0.533,
+      "Vector_peak_util_pct": 0.0084
+    },
+    {
+      "label": "Triton_Ascend_910B2",
+      "N": 1048576,
+      "dtype": "fp16",
+      "GFLOPS": 45.65,
+      "GBps": 16.6,
+      "intensity_FLOP_per_Byte": 2.75,
+      "roofline_predicted_GFLOPS": 4400.0,
+      "efficiency_wrt_roofline": 0.0104,
+      "HBM_util_pct": 1.038,
+      "Vector_peak_util_pct": 0.0163
+    },
+    {
+      "label": "Triton_Ascend_910B2",
+      "N": 8388608,
+      "dtype": "fp16",
+      "GFLOPS": 200.23,
+      "GBps": 72.812,
+      "intensity_FLOP_per_Byte": 2.75,
+      "roofline_predicted_GFLOPS": 4399.93,
+      "efficiency_wrt_roofline": 0.0455,
+      "HBM_util_pct": 4.551,
+      "Vector_peak_util_pct": 0.0715
+    },
+    {
+      "label": "Triton_Ascend_910B2",
+      "N": 33554432,
+      "dtype": "fp16",
+      "GFLOPS": 272.59,
+      "GBps": 99.125,
+      "intensity_FLOP_per_Byte": 2.75,
+      "roofline_predicted_GFLOPS": 4399.94,
+      "efficiency_wrt_roofline": 0.062,
+      "HBM_util_pct": 6.195,
+      "Vector_peak_util_pct": 0.0974
+    },
+    {
+      "label": "Triton_Ascend_910B2",
+      "N": 67108864,
+      "dtype": "fp16",
+      "GFLOPS": 329.01,
+      "GBps": 119.641,
+      "intensity_FLOP_per_Byte": 2.75,
+      "roofline_predicted_GFLOPS": 4399.96,
+      "efficiency_wrt_roofline": 0.0748,
+      "HBM_util_pct": 7.478,
+      "Vector_peak_util_pct": 0.1175
+    },
+    {
+      "label": "Triton_Ascend_910B2",
+      "N": 134217728,
+      "dtype": "fp16",
+      "GFLOPS": 585.71,
+      "GBps": 212.986,
+      "intensity_FLOP_per_Byte": 2.75,
+      "roofline_predicted_GFLOPS": 4399.99,
+      "efficiency_wrt_roofline": 0.1331,
+      "HBM_util_pct": 13.312,
+      "Vector_peak_util_pct": 0.2092
+    },
+    {
+      "label": "AscendC_910B2_ascendc_production",
+      "N": 65536,
+      "dtype": "fp16",
+      "GFLOPS": 0.13,
+      "GBps": 0.048,
+      "intensity_FLOP_per_Byte": 2.7083,
+      "roofline_predicted_GFLOPS": 4333.33,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0
+    },
+    {
+      "label": "AscendC_910B2_ascendc_production",
+      "N": 524288,
+      "dtype": "fp16",
+      "GFLOPS": 0.15,
+      "GBps": 0.053,
+      "intensity_FLOP_per_Byte": 2.8302,
+      "roofline_predicted_GFLOPS": 4528.3,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_production",
+      "N": 1048576,
+      "dtype": "fp16",
+      "GFLOPS": 0.15,
+      "GBps": 0.053,
+      "intensity_FLOP_per_Byte": 2.8302,
+      "roofline_predicted_GFLOPS": 4528.3,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_production",
+      "N": 8388608,
+      "dtype": "fp16",
+      "GFLOPS": 0.15,
+      "GBps": 0.054,
+      "intensity_FLOP_per_Byte": 2.7778,
+      "roofline_predicted_GFLOPS": 4444.44,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_production",
+      "N": 33554432,
+      "dtype": "fp16",
+      "GFLOPS": 0.15,
+      "GBps": 0.054,
+      "intensity_FLOP_per_Byte": 2.7778,
+      "roofline_predicted_GFLOPS": 4444.44,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_production",
+      "N": 67108864,
+      "dtype": "fp16",
+      "GFLOPS": 0.15,
+      "GBps": 0.054,
+      "intensity_FLOP_per_Byte": 2.7778,
+      "roofline_predicted_GFLOPS": 4444.44,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_production",
+      "N": 134217728,
+      "dtype": "fp16",
+      "GFLOPS": 0.15,
+      "GBps": 0.054,
+      "intensity_FLOP_per_Byte": 2.7778,
+      "roofline_predicted_GFLOPS": 4444.44,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_scalar",
+      "N": 65536,
+      "dtype": "fp16",
+      "GFLOPS": 0.13,
+      "GBps": 0.046,
+      "intensity_FLOP_per_Byte": 2.8261,
+      "roofline_predicted_GFLOPS": 4521.74,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0
+    },
+    {
+      "label": "AscendC_910B2_ascendc_scalar",
+      "N": 524288,
+      "dtype": "fp16",
+      "GFLOPS": 0.14,
+      "GBps": 0.051,
+      "intensity_FLOP_per_Byte": 2.7451,
+      "roofline_predicted_GFLOPS": 4392.16,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_scalar",
+      "N": 1048576,
+      "dtype": "fp16",
+      "GFLOPS": 0.14,
+      "GBps": 0.052,
+      "intensity_FLOP_per_Byte": 2.6923,
+      "roofline_predicted_GFLOPS": 4307.69,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_scalar",
+      "N": 8388608,
+      "dtype": "fp16",
+      "GFLOPS": 0.14,
+      "GBps": 0.052,
+      "intensity_FLOP_per_Byte": 2.6923,
+      "roofline_predicted_GFLOPS": 4307.69,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_scalar",
+      "N": 33554432,
+      "dtype": "fp16",
+      "GFLOPS": 0.14,
+      "GBps": 0.052,
+      "intensity_FLOP_per_Byte": 2.6923,
+      "roofline_predicted_GFLOPS": 4307.69,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_scalar",
+      "N": 67108864,
+      "dtype": "fp16",
+      "GFLOPS": 0.14,
+      "GBps": 0.052,
+      "intensity_FLOP_per_Byte": 2.6923,
+      "roofline_predicted_GFLOPS": 4307.69,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    },
+    {
+      "label": "AscendC_910B2_ascendc_scalar",
+      "N": 134217728,
+      "dtype": "fp16",
+      "GFLOPS": 0.14,
+      "GBps": 0.052,
+      "intensity_FLOP_per_Byte": 2.6923,
+      "roofline_predicted_GFLOPS": 4307.69,
+      "efficiency_wrt_roofline": 0.0,
+      "HBM_util_pct": 0.003,
+      "Vector_peak_util_pct": 0.0001
+    }
+  ]
+}
