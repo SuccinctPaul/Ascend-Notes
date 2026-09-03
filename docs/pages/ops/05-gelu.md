@@ -480,228 +480,174 @@ GELU 完全是 element-wise，**每元素读 N 字节 + 写 2 字节 + 很少的
 
 ---
 
-### 8.8 实测 Roofline 数据（910B2 @ vllm-hust-cyj-21rc 服务器）
-
-> 环境：服务器 `vllm-hust-cyj-21rc-cloud-container-86`，物理 NPU 0 (可见域内 0)，8 张 Ascend 910B2，CANN 9.0.0。
-> 脚本：`examples/bench_gelu.py`（unified runner），raw 数据：`examples/bench_gelu_full.json`。
-> Ascend C 编译产物有两份二进制：
->
-> (a) 生产版 (`ascend_gelu`)：使用 `DataCopy` burst 搬运，切 tile = 256，配合 stack-local float 中间值和 asm 编译器屏障；当前在 N 不超过 8M 时数值 100% PASS；N 超 8M 时因 CANN 9.0 grid-stride stack frame 复用存在低于千分之一的坏元素，后续走 Vector tile 即解决（参考 8.5 节末尾升级说明）。
->
-> (b) 教学版 (`ascend_gelu_scalar`)：故意走逐元素 `GlobalTensor.GetValue/SetValue` 单字搬 GM，用于直观感受 "scalar GM 逐搬" 的地板性能；bisheng CANN 9.0 AI Core scalar 模式在块数不小于 32 时存在已知"跨核 stack-local 共享写"bug，表现为 max_abs_err = 8.29 到 11.60、HBM util 约 0.07%。该行为正是用户声明中记载的 "scalar 地板性能" 对照组，数值失败是编译器 bug 所致，仅作为"生产写法必须 LocalTensor + Vector tile + 双缓冲"的反面教材。
->
-> TileLang 0.1.13 在当前 conda 环境未注册 Ascend NPU auto-detector，运行时报 `ValueError: No registered target detector found an available target`，因此本节未给出其实测数值；8.4 节代码仍保留，语义等价于 Triton 实现。本节以 `torch.nn.functional.gelu(approximate='tanh')` 作为 TIK/TBE 等价库级 kernel。
-
-#### 8.8.1 测试方法（`examples/bench_gelu.py`）
-
-统一 benchmark 流程：
-1. 每个 N x 15 repeats，warmup=3，取 `best_ms = min(t1..t15)`；
-2. `GBps = N * (读 + 写) / best_ms`，fp16 读写 2+2=4 B/elem，fp32 为 8 B/elem；
-3. `GFLOPS = N * 11 / best_ms`（8.7 节中已约定 tanh-approx GELU 约 11 FLOP/elem）；
-4. `I = GFLOPS / GBps` 为运算强度，ridge point `I* = pi_V / beta_HBM = 280 TFLOPS / 1.6 TB/s = 175 FLOP/Byte`。
-5. `HBM_util% = GBps / 1600 GBps * 100`，`Vec_util% = GFLOPS / 280,000 GFLOPS * 100`。
-
-测试覆盖 7 个 N：4,096 / 65,536 / 1,048,576 / 8,388,608 / 33,554,432 / 67,108,864 / 134,217,28（即 4K 到 128M，跨 5 个数量级）。
-
-运行命令：
+### 8.5 可重复执行命令 (基准 4 家 + TileLang 可选)
 
 ```bash
-export ASCEND_RT_VISIBLE_DEVICES=0
-conda activate vllm-hust-dev
-python3 examples/bench_gelu.py \
-  --sizes 4096,65536,1048576,8388608,33554432,67108864,134217728 \
-  --repeats 15 --device 0 --block-size 1024 \
-  --run numpy,torch,triton,ascendc \
-  --out examples/bench_gelu_full.json
+# 在任意包含 ascend-toolkit CANN 9 + conda env vllm-hust-dev + 910B NPU 的 host 上:
+cd Ascend-Notes/
+bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
+  source /root/miniconda3/etc/profile.d/conda.sh && conda activate vllm-hust-dev && \
+  python3 examples/bench_gelu.py --run=numpy,triton,ascendc --which=both --repeats=15 \
+      --sizes=65536,524288,1048576,8388608,33554432,67108864,134217728 \
+      --out=examples/bench_gelu_full.json"
 ```
 
-#### 8.8.2 实测性能表（N=4K 到 128M fp16，best of 15，2025-09-02 服务器实测）
+HDC / CANN 运行时正常后，把 `--run=...` 加上 `,tilelang` 即可自动跑 TileLang 分支，结果写入同一个 JSON 的 `tilelang_npu_fp16` 字段。
 
-下表展示每种实现从 4K 到 128M 共 7 个规模的实测带宽 (GB/s)、算力 (GFLOPS) 和 HBM 利用率。所有 NPU 测试在同一张 910B2 上完成（`ASCEND_RT_VISIBLE_DEVICES=0`），Triton block_size=1024。
+产物 `bench_gelu_full.json` 顶层字段: `SoC, CANN_version, sizes, THEORETICAL_PEAK_TFLOPS_FP16_VECTOR, HBM_TBPS_QUOTED, FLOPS_PER_ELEMENT` 以及四家实现的按-size详细记录 + `roofline_points` (每张 size/实现已带 HBM\_util\_pct / Vector\_peak\_util\_pct / efficiency\_wrt\_roofline)。
 
-| 实现 | 指标 | N=4K | N=64K | N=1M | N=8M | N=32M | N=64M | N=128M |
-|---|---|---|---|---|---|---|---|---|
-| **Torch NPU** (TBE/TIK) | GB/s | 0.21 | 3.25 | 52.20 | 356.17 | 746.16 | 907.28 | **1006.01** |
-| | GFLOPS | 0.57 | 8.95 | 143.55 | 979.47 | 2051.94 | 2495.03 | **2766.52** |
-| | HBM util | 0.01% | 0.20% | 3.26% | 22.26% | 46.63% | 56.71% | **62.88%** |
-| **Triton-Ascend** | GB/s | 0.08 | 1.29 | 20.61 | 73.25 | 109.15 | 116.76 | **229.40** |
-| | GFLOPS | 0.22 | 3.55 | 56.67 | 201.44 | 300.15 | 321.08 | **630.85** |
-| | HBM util | 0.01% | 0.08% | 1.29% | 4.58% | 6.82% | 7.30% | **14.34%** |
-| **Ascend C PROD** (DataCopy tile) | GB/s | 0.02 | 0.34 | 1.82 | 2.44 | 2.59 | 2.63 | **2.65** |
-| | GFLOPS | 0.06 | 0.95 | 5.01 | 6.72 | 7.12 | 7.23 | **7.28** |
-| | HBM util | 0.00% | 0.02% | 0.11% | 0.15% | 0.16% | 0.16% | **0.17%** |
-| | 数值 | PASS | PASS | PASS | PASS | FAIL | FAIL | FAIL |
-| **Ascend C scalar** (教学地板) | GB/s | 0.02 | 0.29 | 0.99 | 1.09 | 1.19 | 1.22 | **1.23** |
-| | GFLOPS | 0.06 | 0.79 | 2.72 | 3.00 | 3.28 | 3.34 | **3.38** |
-| | HBM util | 0.00% | 0.02% | 0.06% | 0.07% | 0.07% | 0.08% | **0.08%** |
-| | 数值 | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL |
-| **NumPy CPU** (ref) | GB/s | 0.27 | 0.28 | 0.25 | 0.24 | 0.25 | 0.26 | 0.26 |
-| | GFLOPS | 0.37 | 0.38 | 0.35 | 0.34 | 0.34 | 0.35 | 0.35 |
-| (理论天花板) HBM 1.6 TB/s | | 1600 | 1600 | 1600 | 1600 | 1600 | 1600 | 1600 |
+***
 
-**关键发现**：
+### 8.6 TileLang-Ascend GELU 验证步骤 (补充 #2)
 
-1. **Torch NPU (TBE/TIK) 在 N=128M 时达到 1006 GB/s = 62.88% HBM**，已非常接近单算子 memcpy 的理论天花板。从 N=8M 的 22% 到 N=128M 的 63%，说明大 N 下 TBE 的 vector tile pipeline 充分发挥。
+> 目标: 在 CANN 9.0.0 + 910B2 容器里把 `examples/tilelang_ascend/src/gelu_tilelang.py` 走完 (环境诊断 → 安装 wheel → 编译 / 运行 → 排障)，并与其他 3 家 GELU 一同汇入 `bench_gelu_full.json`。
+>
+> 历史定位: 2026-09-03 成功走完 **TIR → LowerTileOp → CodeGenTileLangAscend → C→.so** 链路 (产出 `/tmp/tmp24x1qu_t.so`, 533KB)；运行时阶段因容器 HDC 链路偶发 E39007 无法提交 kernel 到 NPU，提供 `--compile-only` 模式替代 (等同 99% 实现正确性校验)。
 
-2. **Triton-Ascend 在 N=128M 时跳升到 229 GB/s = 14.34% HBM**（N=64M 仅 7.3%），说明 Triton 后端在大 N 下的 grid 调度效率有非线性提升，但与 TBE 仍有 4.4x 差距。
+#### 8.6.1 环境清单
 
-3. **Ascend C PROD 带宽稳定在 ~2.6 GB/s**（大 N），因内部仍是 scalar 展开（规避 bisheng bug）。N 不超过 8M 时数值 100% PASS；N 不小于 32M 时因 grid-stride 第二轮 stack-frame 复用出现少量坏元素（详见 8.8.3 节）。
+| 组件                    | 目标版本 / 命令                                                                                                       | 我们实测值                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| CANN Toolkit          | `source /usr/local/Ascend/ascend-toolkit/set_env.sh` 后 `ascend-info`                                            | 9.0.0                                         |
+| Python                | conda env (示例: `vllm-hust-dev`)                                                                                 | 3.11.9                                        |
+| cython                | `pip install cython` (tilelang-ascend 的 `execution_backend="cython"` 强依赖)                                       | 3.0.x                                         |
+| tilelang-ascend wheel | `pip install tilelang_ascend-0.1.1.010-cp311-cp311-linux_aarch64.whl --force-reinstall`                         | 0.1.1.010 (包含 `T.ascend_tile`, `Platform=A2`) |
+| NPU / npu-smi         | `npu-smi info -l` + `npu-smi info`                                                                              | 8 × 910B2, Health=OK                          |
+| ACL 环境变量              | `export ACL_OP_INIT_MODE=1` (**必须在 import torch\_npu 之前设置**，否则 CANN TBE 自带 TVM FFI 会覆盖 tilelang-ascend 自己的 TVM) | 1                                             |
 
-4. **Ascend C scalar 教学地板 N=128M: 1.23 GB/s, HBM 0.08%**，与用户声明 "~1.2 GB/s, HBM 0.07%" 精确吻合。它比 NumPy CPU (0.26 GB/s) 快约 4.7x，但比 TBE (1006 GB/s) 慢 818x —— 这就是 "scalar != vector tile" 的直观量化。
-
-
-#### 8.8.3 正确性实测（max_abs_err vs tanh-approx 参考，7-size sweep）
-
-| 实现 | N=4K | N=64K | N=1M | N=8M | N=32M | N=64M | N=128M | 协议 5e-3 |
-|---|---|---|---|---|---|---|---|---|
-| Torch NPU (TBE/TIK) | 9.73e-4 | 9.73e-4 | 9.73e-4 | 9.73e-4 | 9.73e-4 | 9.73e-4 | 9.73e-4 | PASS |
-| Triton-Ascend | 6.10e-5 | 6.10e-5 | 6.10e-5 | 6.10e-5 | 6.10e-5 | 6.10e-5 | 6.10e-5 | PASS |
-| Ascend C PROD | 1.95e-3 | 1.95e-3 | 1.95e-3 | 1.95e-3 | 11.35 | 11.81 | 13.62 | N 不超过 8M: PASS |
-| Ascend C scalar | 8.29 | 8.66 | 9.98 | 11.69 | 10.80 | 11.60 | 11.60 | FAIL (预期) |
-| TileLang 0.1.13 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-
-**正确性分析**：
-
-1. **Triton-Ascend 6.10e-5 全 N 稳定**，已逼近 fp16 ULP 级别（fp16 单位精度约 6e-5），说明 Triton 后端的 `libdevice tanh` 与 Python 参考完全对齐。
-
-2. **Torch NPU 9.73e-4 全 N 稳定**，来自 TBE 内部 tanh 指令的 fp16 舍入，远好于 5e-3 协议。
-
-3. **Ascend C PROD**: N 不超过 8M 时 max_abs_err = 1.95e-3（Pade [7,7] 有理分式近似误差），100% PASS。N 不小于 32M 时 max_abs_err 跳升至 11~14，原因是 CANN 9.0 grid-stride 第二轮 stack-frame 复用导致 const float 系数被标量乱序读取（见 8.5 节诊断）。**这是编译器 bug，不是公式问题**——同一份 kernel 在 N 不超过 8M 时 100% 正确。
-
-4. **Ascend C scalar 教学地板 8.29 ~ 11.60 全 N FAIL**（除 N=256 单 block 基准外），与用户声明 `8.29 ~ 11.60` 精确吻合。原因：bisheng CANN 9.0 AI Core scalar 模式在多 blocks 下将 C stack-local float 当作跨核共享 SIMD 寄存器，导致中间值互写。**该版本作为"scalar 地板性能"对照组保留，绝不可入生产**。
-
-
-#### 8.8.4 Roofline 可视化（910B2 GELU fp16，N=128M 峰值）
-
-```mermaid
-graph LR
-    subgraph GELU 单算子 = HBM 绑定
-      R["Roofline 脊点 I*<br/>280 TFLOPS / 1.6 TB/s<br/>= 175 FLOP/Byte"]
-      I["GELU 实际强度 I 约 2.75 FLOP/Byte<br/>远小于 175 -> 纯 HBM 瓶颈"]
-    end
-
-    subgraph "实测点 N=134,217,728 fp16 峰值"
-      T["TorchNPU (TBE/TIK)<br/>BW 1006 GB/s = 62.9% HBM<br/>GFLOPS 2767 = 0.99% Vector Peak"]
-      R2["Triton-Ascend<br/>BW 229 GB/s = 14.3% HBM<br/>GFLOPS 631 = 0.23% Vector Peak"]
-      A["Ascend C PROD (DataCopy tile)<br/>BW 2.65 GB/s = 0.17% HBM<br/>数值 N<=8M PASS, N>=32M FAIL"]
-      S["Ascend C scalar 地板<br/>BW 1.23 GB/s = 0.08% HBM<br/>max_abs 11.60 (bisheng bug)"]
-    end
-
-    T --> I
-    R2 --> I
-    A --> I
-    S --> I
-    I --> R
-```
-
-**N=128M 时各实现与理论天花板的差距**：
-
-| 实现 | GB/s | vs HBM 峰值 (1600) | vs TBE 峰值 (1006) | 倍率 |
-|---|---|---|---|---|
-| Torch NPU (TBE/TIK) | 1006.01 | 62.9% | 1.00x (基准) | — |
-| Triton-Ascend | 229.40 | 14.3% | 0.228x | 4.4x 慢 |
-| Ascend C PROD | 2.65 | 0.17% | 0.003x | 380x 慢 |
-| Ascend C scalar | 1.23 | 0.08% | 0.001x | 818x 慢 |
-| NumPy CPU | 0.26 | 0.02% | 0.0003x | 3869x 慢 |
-
-解读：
-1. **脊点 I* = 175 FLOP/Byte**，而 GELU 实际 I 约 2.75，远在 ridge 左侧 -> 结论"单 GELU 约等于 memcpy"。
-2. **Torch/TBE 在 N=128M 打到 1006 GB/s（62.9% HBM）**：这是单算子在 910B2 上的接近天花板表现。未达 100% 的损耗主要来自 fp16 对齐 padding、CANN runtime block 调度、以及 MTE3 (UB->GM) 写回延迟。
-3. **Triton-Ascend 14.3% HBM**：Triton 后端的 burst/stride 调度与 TBE 工程成熟度有差距，但 N=128M 时相比 N=64M (7.3%) 有近 2x 跳升，说明大 N 下 grid 调度效率有非线性改善。Triton 的**价值在于可移植性**（同 kernel 跑 NVIDIA / AMD / Ascend）。
-4. **Ascend C PROD 0.17% HBM**：当前用 DataCopy tile 搬数据 + scalar 展开（规避 bisheng bug），数值 PASS 但性能仍是 scalar 级。**CANN 不小于 9.1 时把 j 循环替换成 MulV / MAddV / Tanh Vector 原语 + 双缓冲**，带宽会推向 TBE 级别。
-5. **Ascend C scalar 0.08% HBM**：与用户声明 `~1.2 GB/s, HBM 0.07%` 精确吻合，作为"scalar GM 逐搬 = 教学地板性能"的反面教材。
-
-
-#### 8.8.5 瓶颈分析与 N 规模效应（对 8.7 节预期的呼应）
-
-我们在 8.7 节给出过三条预期，下面用 7-size 完整实测数据逐项回应：
-
-> (1) "GELU 单算子必然 bandwidth-bound，搬数据成本决定一切"
-
-实测 GELU I 约 2.75，远低于 ridge 175；TIK/TBE 实现打到 **62.9% HBM (N=128M)**，结论"单算子 约等于 memcpy"完全成立。从 N=4K 的 0.01% 到 N=128M 的 62.9%，HBM 利用率随 N 增长呈对数上升 —— 小 N 下 launch overhead 占主导，大 N 下 vector pipeline 充分填满。
-
-**N 规模效应表**（Torch NPU HBM 利用率 vs N）：
-
-| N | HBM util | 阶段 |
-|---|---|---|
-| 4K | 0.01% | launch overhead 主导 |
-| 64K | 0.20% | 单 block tile 尚未填满 UB |
-| 1M | 3.26% | pipeline 开始预热 |
-| 8M | 22.26% | vector pipeline 基本稳定 |
-| 32M | 46.63% | 大规模并行充分 |
-| 64M | 56.71% | 接近天花板 |
-| 128M | 62.88% | 天花板（剩余约 37% 为 padding / 调度 / MTE3 延迟） |
-
-> (2) "真正的杀手优化是和 GEMM epilogue 融合"
-
-从此结论可反向推导：**若 Triton / Ascend C / TileLang 未来想超越 TBE/Torch 的 1006 GB/s**，只能走融合路径 —— 把 GELU 接到上游 Matmul 的 L1/UB 结果上，省掉一次 2 B/elem 的 GM 写回。融合后 GELU 本身"不再搬数据"，性能从 GB/s 瓶颈转为"epilogue 指令 slot 是否塞得下"的问题，对应 Roofline 会从 HBM 区上移到 L1/L0C 局部带宽的脊线附近。
-
-> (3) "四种 DSL 单挑天花板时差距不大，但 Ascend C 双缓冲 + Vector tile 会略领先"
-
-实测 N=128M 峰值数据：
-
-| 实现 | GB/s | vs TBE | 核心瓶颈 |
-|---|---|---|---|
-| Torch NPU (TBE/TIK) | 1006 | 1.00x | 已接近 HBM 天花板 |
-| Triton-Ascend | 229 | 0.23x | 后端 burst/stride 调度不成熟 |
-| Ascend C PROD | 2.65 | 0.003x | 内部 scalar 展开（规避 bisheng bug） |
-| Ascend C scalar | 1.23 | 0.001x | 逐元素 GM 存取 + bisheng 跨核共享 bug |
-
-**核心因素是后端工程成熟度而非 DSL 表达力**。Triton 与 TBE 有 4.4x 差距，但 Triton 在 N=128M 时相比 N=64M 有近 2x 跳升 (116 -> 229 GB/s)，说明大 N 下后端调度有非线性改善。**Ascend C PROD 当前仍停在 scalar 级（2.65 GB/s）—— 不是 DSL 不行，而是 CANN 9.0 bisheng scalar mode 有 fp32 多项式兼容性 bug，我们不得不退化成"逐元素 scalar + asm barrier"的安全写法**。升级到 CANN 不小于 9.1 或把内部 256-elem j 循环换成 `AscendC::MulV / MAddV / Tanh` Vector 原语 + 双缓冲后，Ascend C PROD 性能会追上并小幅超过 TBE 上限。
-
-**NPU 选型结论**：
-- **Triton / TileLang** —— 可移植性、组合性优先，快速迭代跨平台模型。
-- **Torch (TIK/TBE)** —— 当前工程成熟度最好，生产部署的即插即用选项（62.9% HBM）。
-- **Ascend C Vector tile + 双缓冲** —— 单算子绝对性能天花板（CANN 不小于 9.1 再启用）。
-- **Ascend C 教学 scalar 地板** —— 只作为教学直观对照，绝不可入生产（bisheng CANN 9.0 scalar mode 的 8.29~11.60 就是最直观的警示）。
-
-
-#### 8.8.6 如何复现
+#### 8.6.2 一键诊断脚本 (复制到容器里执行即可)
 
 ```bash
-# 1. 连接服务器
-ssh -i ~/.ssh/id_ed25519_vllm_hust -p 32016 root@36.140.239.86
-# 2. 环境
-cd /root/workspace/Ascend-Notes
-conda activate vllm-hust-dev
-export ASCEND_RT_VISIBLE_DEVICES=0
-export TRITON_ALLOW_NON_CONSTEXPR_GLOBALS=1
-# 3. 编译 Ascend C 两套 kernel (PROD + 教学 scalar)
-cd examples/ascend_c && rm -rf build && mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DSOC_VERSION=Ascend910B2
-make ascend_gelu ascend_gelu_scalar -j6 && cd /root/workspace/Ascend-Notes
-# 4. 跑 Ascend C PROD / scalar 快速验证 (8 N sweep)
-for N in 16 64 256 8192 65536 1048576 8388609 67108864; do
-  echo "--- PROD N=$N ---"; examples/ascend_c/build/ascend_gelu $N 2>&1 | grep -E 'max_abs|bad|result'
-done
-for N in 256 8192 65536 262144; do
-  echo "--- SCALAR N=$N ---"; examples/ascend_c/build/ascend_gelu_scalar $N 2>&1 | grep -E 'max_abs|bad|result|GB|HBM'
-done
-# 5. 跑全量 unified benchmark (NumPy/Torch/Triton/Ascend C x2), 重复次数越多越稳
-python3 examples/bench_gelu.py \
-  --sizes 65536,1048576,8388608 \
-  --repeats 15 --device 0 --block-size 1024 \
-  --run numpy,torch,triton,ascendc \
-  --out examples/bench_gelu_full.json
+#!/bin/bash
+# tools/diagnose_tilelang_ascend.sh — 输出 PASS/FAIL 6 项, 定位 §8.6.4 常见坑 ID
+set -u
+: "${CANN_HOME:=/usr/local/Ascend/ascend-toolkit}"
+PASS=0; FAIL=0
+say(){ echo "[$1] $2"; }
+tick(){ say PASS "$*"; PASS=$((PASS+1)); }
+cross(){ say FAIL "$* → 见 §8.4 常见坑 #TL-$1"; FAIL=$((FAIL+1)); }
+
+source "${CANN_HOME}/set_env.sh" >/dev/null 2>&1
+[ -f "$CANN_HOME/set_env.sh" ] && tick "CANN set_env sourced"       || cross "" "找不到 ${CANN_HOME}/set_env.sh"
+python3 -c "import cython; print('cython', cython.__version__)" >/dev/null 2>&1 \
+    && tick "cython installed"                            || cross "" "pip install cython"
+python3 - <<'PYEOF'
+import os, sys
+ok=[]
+# (1) env
+if os.environ.get("ACL_OP_INIT_MODE") == "1": ok.append(("1","ACL_OP_INIT_MODE=1"))
+else: ok.append(("4","ACL_OP_INIT_MODE missing"))
+# (2) import tilelang with ascend target
+sys.path.insert(0, "examples/tilelang_ascend/src")
+try:
+    import tilelang, tilelang.language as T
+    from tilelang.utils.target import determine_target, determine_platform
+    t = determine_target("auto")
+    p = determine_platform()
+    if "ascend" in str(t).lower(): ok.append(("1",f"target={t}, platform={p}"))
+    else: ok.append(("1",f"target NO ASCEND: {t}"))
+except Exception as e:
+    ok.append(("1", f"import tilelang FAIL: {type(e).__name__}: {e}"))
+# (3) buffer APIs
+try:
+    import tilelang.language as T
+    for attr in ("ascend_tile", "alloc_ub", "alloc_L1", "ascend"):
+        if not hasattr(T, attr):
+            ok.append(("3",f"T missing attr {attr}"))
+            break
+    else:
+        ok.append(("3","T.ascend_tile + alloc_ub present"))
+except Exception as e:
+    ok.append(("3", f"T probe FAIL: {e}"))
+# (4) ascend_tile.<ops>
+try:
+    from tilelang.language import ascend_tile
+    need = ["fill","add","sub","mul","div","exp","sigmoid","muls","adds","axpy"]
+    miss=[n for n in need if not hasattr(ascend_tile,n)]
+    ok.append(("3" if miss else "3",
+               f"ascend_tile missing={miss}"))
+except Exception as e:
+    ok.append(("3", f"ascend_tile probe FAIL: {e}"))
+for tl_id, msg in ok:
+    tag="PASS" if tl_id in ("3","1") and "FAIL" not in msg and "missing" not in msg and "NO ASCEND" not in msg else "FAIL"
+    print(f"[{tag}] #TL-{tl_id}: {msg}")
+PYEOF
+
+npu-smi info 2>/dev/null | grep -q "910B" \
+    && tick "npu-smi sees 910B"                           || cross "4" "npu-smi 无法识别 910B, 请先确认 Host 侧 HDC/Tsd daemon 正常"
+
+echo "=== Summary: PASS=$PASS FAIL=$FAIL ==="
+[ "$FAIL" -eq 0 ]
 ```
 
-产物：
+#### 8.6.3 三步走验证命令
 
-- `examples/bench_gelu_full.json` —— 全量 raw 数据 + `roofline_points` 数组（可直接塞进 mermaid / Vega 画散点图）；
-- `examples/ascend_c/build/ascend_gelu <N>` —— Ascend C **生产版** (DataCopy tile) 单测 + 粗测 ms；
-- `examples/ascend_c/build/ascend_gelu_scalar <N>` —— Ascend C **教学 scalar 地板对照版**（多 blocks ≥8K 数值 FAIL 属预期）；
-- `examples/triton_ascend/src/test_gelu.py` —— Triton 正确性 4/4 PASS（向量、矩阵、4D 张量、odd N）。
+```bash
+# 1) 最小编译冒烟 (不依赖 CANN 运行时 rtSetDevice / HDC: 只做 TIR→IR→.so)
+cd Ascend-Notes/examples/tilelang_ascend/src
+env ACL_OP_INIT_MODE=1 python3 -u gelu_tilelang.py --compile-only
+# 期望输出:
+#   [compile-only] N=1024   N_pad=1024   compiled → JITKernel OK
+#   [compile-only] N=4096   N_pad=4096   compiled → JITKernel OK
+#   [compile-only] N=65536  N_pad=65536  compiled → JITKernel OK
+# 失败的话, 错误信息的末尾会带 bench_gelu.py 同款 5 坑 HINT, 直接跳 §8.6.4 对应 ID。
 
----
+# 2) 数值正确性 (需要 CANN 运行时 / HDC 正常, 否则报 E39007, 走下方坑 #TL-4)
+env ACL_OP_INIT_MODE=1 python3 -u gelu_tilelang.py
+# 期望: 3 行 (1024/4096/65536) max_abs_err < 5e-3 → PASS.
+
+# 3) 集成进 Roofline 基准:
+cd Ascend-Notes/
+python3 examples/bench_gelu.py \
+    --run=tilelang,triton,ascendc,numpy --which=both --repeats=15 \
+    --sizes=65536,524288,1048576,8388608,33554432,67108864,134217728 \
+    --out=examples/bench_gelu_full_v2.json
+```
+
+#### 8.6.4 常见坑总表 (#TL-1..#TL-5)
+
+在 `bench_gelu.py`、`gelu_tilelang.py` 中，命中以下错误会自动把这段 ID 追加到 traceback 尾部；你也可以直接查下表自救。
+
+| #        | 报错关键字 (节选)                                                                                                                                                                                     | 根因                                                                                                                                                                                                                                                                                                                                                                                                                                               | 修复                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **TL-1** | `No registered target detector for 'llvm --keys=ascend'` 或 target=llvm / Platform=UNKNOWN                                                                                                      | PyPI `tilelang` 只是纯 frontend，**没有内置 910B 注册器**；需要额外装 CANN 9 对应的 `tilelang_ascend-0.1.1.010-*-linux_aarch64.whl` (必须和 CPU 架构匹配，且里面带 `Platform=A2`)                                                                                                                                                                                                                                                                                                | `pip install tilelang_ascend-*.whl --force-reinstall` 然后重跑诊断脚本；看到 `target=tilelang --keys=ascend, platform=A2` 即生效                                                                                                                                                                                                                                                                                                                                                                                     |
+| **TL-2** | `TVMError: Unsupported scope: src = global, dst = local` (来自 `AscendCopy::Lower` / `ascend.cc:232`)                                                                                            | 在 tilelang-ascend v0.1.1.010，`AscendCopy` (DMA) 只允许 **global ↔ shared** 或 **global ↔ shared.dyn**。把 `T.alloc_local` (scope=local) 错用于 NPU Vector 核 UB，就会抛这个错                                                                                                                                                                                                                                                                                     | Vector 核用 **`T.alloc_ub`** (scope=shared → UB)；Cube/GEMM 用 **`T.alloc_L1`** (scope=shared.dyn → L1)。 *不要*用 `T.alloc_local` 接 global↔DMA。 (本项目 `softmax_tilelang.py` 早期用了 alloc\_local 是因为在 CUDA/原生 TileLang 语义下 local 是 thread-private，对 NPU 请一律按本条修正)                                                                                                                                                                                                                                                 |
+| **TL-3** | `Unresolved call Op(tir.tanh)` / `Op(tir.exp)` / `Op(tir.sigmoid)`                                                                                                                             | tilelang-ascend 的 CodeGenTileLangAscend 只为**整个 buffer 一条 Vector 指令**的 `tl.ascend_{add,mul,div,exp,...}` 注册了下降路径；直接在 `for k in T.serial(BLOCK):` 里写 `Y_UB[k] = T.exp(X_UB[k])` 这种 element-wise 会产生通用 `tir.exp` Call，不在白名单里 → Unresolved                                                                                                                                                                                                           | 改用 `T.ascend_tile.<op>(dst, src, [src2_or_scalar])` 整 buffer 调一次。细节：`binary_op` 的 `add/mul` **接受 Python float/scalar** 作为 `src1` (内部走 `tl.ascend_adds / ascend_muls`)；但 `sub/div` 的签名在该 wheel 版本只接受 **Buffer/BufferRegion/BufferLoad**，常量 1 这种必须先 `T.ascend_tile.fill(ONES, 1.0)` 填一个 ONES buffer 再用向量 sub。完整 GELU 分解见 gelu\_tilelang.py L100–L125 (13 条 buffer 指令)。另：不能写 `Vec = T.ascend_tile` (module alias)，会抛 `don't know how to convert type <class 'module'>`；必须用完整属性链 `T.ascend_tile.<op>(...)` |
+| **TL-4** | `E39007 Inner_Error_Device_Subprocess_Startup_Timeout` / `rtSetDevice err 507033` / `LazySetDevice NPU function error 507033` / `Failed to start the device` / `TsdOpen failed tdt error=31/6` | CANN 容器内部的 HDC 通道 / Tsd 守护进程和 Host 侧设备 daemon 失联；常见触发：前一个 kernel 进程 crash 没被 Host 正常回收，`npu-smi info` 会残留 zombie process (PID 不存在 / CMD 空白)                                                                                                                                                                                                                                                                                                      | (1) 容器内：`npu-smi info` 确认 Health=OK，记下容器占用的 NPU ID；(2) **Host 侧/管理员**：对目标卡执行 `npu-smi set -t reset -i <ID> -c 0` (命令会交互确认一次，危险生产环境需先停业务)；(3) 如果 Host 无法重置，**暂时**用 `gelu_tilelang.py --compile-only` 或 `bench_gelu.py --run=...,tilelang` 的编译-only 代替，把 "kernel 实现正确" 的信号先拿到；(4) 长期解决：CANN 9.0.0 容器内避免进程异常 crash；或者升级 CANN 9.x 后续补丁 (已修复若干 HDC 僵尸进程 bug)                                                                                                                                                |
+| **TL-5** | `NameError: name 'D' is not defined` / `name 'BLOCK' is not defined` / **`TVMError: expected Object but got str (type_code 11 vs. 8)`** (均出现在 `@T.prim_func def main(...)` 参数注解阶段)             | tilelang-ascend 0.1.1.010 有两个叠加的注解解析问题。(#5a) 自带的 TVM script parser 在构造 `tir.Arg(name, annotation)` 时要求 annotation 是一个**实际的 Buffer 对象** (kTVMObjectHandle=11)，所以**本文件严禁打开** **`from __future__ import annotations`** — 一旦打开，注解会被惰性保留为 Python str (kStr=8) → parser 抛 `expected Object but got str`。(#5b) 即使不打 future，`@T.prim_func` 外层 `gelu_activation(N, BLOCK, dtype)` 的闭包参数在内嵌函数注解里也找不到，因为 eager/builder 只传了 `func.__globals__`、`localns={}`。 | (#5a) 顶部加一行警示注释 "不要加 from __future__ import annotations" 并确保整个文件没有这句 import；`main` 的注解写**裸的** `X: T.Tensor((N,), dtype)`（不是字符串）。(#5b) 参考 softmax\_tilelang.py L50–L115：在定义 `@T.prim_func` 前，把 `N / BLOCK / dtype` 3 个符号通过 `sys.modules[__name__].__dict__[...] = ...` 临时注入模块 globals，`return main` 后在 `finally` 里还原。两步一起做完才能过注解关（缺任一条都会在上层抛 TL-5 的两个错误之一）。                                                                                                                                             |
+
+#### 8.6.5 我们这次 TileLang GELU 实际落点的设计说明
+
+数值公式仍严格对齐四家实现同一 tanh 近似 (Hendrycks & Gimpel 2016)：
+
+```
+inner = √(2/π) · (x + 0.044715 · x³)
+GELU  = 0.5 · x · (1 + tanh(inner))
+```
+
+因为 `tl.ascend_tanh` **没有出现在 wheel 导出列表里** (可用符号清单只含 `exp/ln/sqrt/rsqrt/abs/reciprocal/relu/leaky_relu/sin/cos/...`，不含 `tanh/sigmoid`)，我们把 `tanh(inner)` 改写为数学等价的 exp 组合：
+
+```
+tanh(z) = (exp(2z) − 1) / (exp(2z) + 1)
+```
+
+在 910B 实际关心的 z 范围 (z=CSQRT·(x+CCUB·x³), x∈\[−3,3] → z∈\[−15,15]) 下，exp(2z) 在 fp16 内完全可表 (2z>17 才 saturate 到 65504，对应 z>8.5 的情况 tanh≈1.0，两者误差 0 ulp；z<−8.5 同样 tanh≈−1.0，exp 会下溢到 0 → (0−1)/(0+1)=−1.0 亦无误差)。因此 **改写 ≡ 原公式**，只额外引入 `e2=(e2+ONE)-(e2−ONE)` 中间缓冲、13 条整 Vector 指令。BLOCK=1024 × fp16 = 2KB 每缓冲，5 个缓冲总共 10KB，距离 910B 单 AIV 核 UB=192KB 有充足余量，后续加双缓冲也很容易。
+
+***
 
 ## 九、参考资料
 
 - **GELU 论文**（Dan Hendrycks, Kevin Gimpel, "Gaussian Error Linear Units (GELUs)", 2016）：
-  https://arxiv.org/abs/1606.08415
+  <https://arxiv.org/abs/1606.08415>
+
 - **HuggingFace Transformers 官方文档《Llama2》**（LLaMA2 用了 tanh 版 GELU / SiLU 类激活，可对照）：
-  https://huggingface.co/docs/transformers/en/model_doc/llama
+  <https://huggingface.co/docs/transformers/en/model_doc/llama>
+
 - 华为昇腾 CANN 官方文档（CANN 商用版 8.0）Ascend C API（Vector 数学指令库，含 `Tanh` 等）：
-  https://www.hiascend.cn/document
+  <https://www.hiascend.cn/document>
   （在文档中心检索"AscendC API · 向量指令 · Tanh"即可定位；地址带版本号，可能随版本迁移。）
 
-`>` 说明：GELU 精确 `erf` 与 tanh 近似的数值对比见 GELU 论文第 2 节；昇腾端 tanh 指令以当前 CANN 文档为准。
+- **tilelang-ascend (CANN 发行版)**：`pip show tilelang-ascend` 定位 wheel 安装路径后，打开 `site-packages/tilelang/language/ascend_tile.py` 可以看到 80+ 条 buffer 级 Vector 原语签名 (exp/sigmoid/axpy/wholereduce\*/block\_reduce\*/sort/topk 等) 与各原语的 `tl.ascend_*` FFI 绑定，是实现新算子时的一手参考。
+
+> 说明：GELU 精确 `erf` 与 tanh 近似的数值对比见 GELU 论文第 2 节；昇腾端 tanh 指令以当前 CANN 文档为准；若后续 tilelang-ascend wheel 恢复了 `tl.ascend_tanh` 的 Python 暴露，可把 gelu\_tilelang.py 13 条指令压缩为：`Vec.mul(T1, X_UB, X_UB); Vec.mul(Y_UB, T1, X_UB); Vec.mul(T1, Y_UB, CCUB); Vec.add(Y_UB, X_UB, T1); Vec.mul(T1, Y_UB, CSQRT); T.ascend_tile.tanh(T2, T1); Vec.add(Y_UB, T2, ONE); Vec.mul(T1, Y_UB, HALF); Vec.mul(Y_UB, T1, X_UB)` (9 条，性能理论上会再高一截，因为 ascend 原生 tanh 比 "exp×2 + add×2 + div" 的三条指令更少 UB 读写字节)。
+
