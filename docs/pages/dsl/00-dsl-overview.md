@@ -1,7 +1,7 @@
 # 00 · 四种 DSL 核心手册总览
 
-`>` 目标读者：想用昇腾 NPU 写 kernel，但不知道选哪种 DSL 的人。
-`>` 本文是四篇 DSL 手册的入口，回答一个问题：**四种 DSL 到底有什么区别，我该从哪个开始？**
+> 目标读者：想用昇腾 NPU 写 kernel，但不知道选哪种 DSL 的人。
+> 本文是四篇 DSL 手册的入口，回答一个问题：**四种 DSL 到底有什么区别，我该从哪个开始？**
 
 ***
 
@@ -60,8 +60,8 @@ flowchart LR
     TL -->|"抽象降低"| AC
 ```
 
-`>` **人话**：Python 是"只管对不对"，Triton 是"说清楚块大小，编译器帮你搬"，TileLang 是
-`>` "我来指定搬进哪级缓存、Cube 怎么算"，Ascend C 是"每一搬每一步都我亲手写"。
+> **人话**：Python 是"只管对不对"，Triton 是"说清楚块大小，编译器帮你搬"，TileLang 是
+> "我来指定搬进哪级缓存、Cube 怎么算"，Ascend C 是"每一搬每一步都我亲手写"。
 
 ### 四种 DSL 横向对比
 
@@ -86,8 +86,8 @@ flowchart LR
 | TileLang (tilelang-ascend) | ✅       | 9.77e-04          | 0.38 ms        | PASS |
 | Ascend C                   | ✅       | 0.0               | —              | PASS |
 
-`>` **人话**：同是"一个矩阵乘"，会分块、会喂 Cube 的写法，比傻算快上万倍。性能差距不来自数学，
-`>` 来自"数据怎么搬、算力怎么喂"。
+> **人话**：同是"一个矩阵乘"，会分块、会喂 Cube 的写法，比傻算快上万倍。性能差距不来自数学，
+> 来自"数据怎么搬、算力怎么喂"。
 
 ***
 
@@ -104,7 +104,7 @@ flowchart LR
 ```
 
 它不涉及任何 NPU 概念，只是用 NumPy 在 CPU 上跑一个"最笨但绝对正确"的 GEMM。
-所有 NPU kernel 的输出都要和它做 `allclose(atol=1e-2, rtol=1e-2)` 比对。
+GEMM 各 DSL 的正确性最终都以它（或与其一致的 CPU 参考）为锚做 `allclose(atol=1e-2, rtol=1e-2)` 比对；具体到每个 DSL 的校验对象略有差异（见下文速查表与各篇），以仓库实测脚本为准。
 
 → 详见 [01 · Python/NumPy 正确性基准](/dsl/01-python-baseline)
 
@@ -183,7 +183,7 @@ flowchart TB
     end
 ```
 
-`>` **人话**：四条路殊途同归——最终都跑在 AI Core 的 Cube/Vector 上，区别只是"你亲手控到哪一级"。
+> **人话**：四条路殊途同归——最终都跑在 AI Core 的 Cube/Vector 上，区别只是"你亲手控到哪一级"。
 
 ***
 
@@ -199,7 +199,7 @@ flowchart TB
 
 在这组 128³ 对照里它略快，但不能直接推广。差异更多来自**显式调度**效率：TileLang 明说了
 L1/K\_L1、双缓冲与搬运动作，比 Triton 由编译器自动决策更适合这个规模。换个形状/规模，结论
-可能不同——所以仓库的 README 提醒"先测再说"。
+可能不同——所以换形状/规模后先重测，再下结论。
 
 **Q3：Ascend C 性能上限最高，为什么还要学 Triton/TileLang？**
 
@@ -211,6 +211,7 @@ Ascend C 控制力最强，但开发成本也最高——每个搬运、同步�
 
 完全一样：**fp16 输入/输出 + fp32 累加器**（混合精度）。这是 Cube 单元原生精度，也是避免
 K 维累加精度损失的标准做法。Python 基准同样在乘加前升 fp32，保证对齐口径一致。
+（注意"精度策略一致"≠"校验对象一致"：Triton 测试对 `torch.matmul`、Ascend C 对自带 CPU 参考、TileLang GELU 用 `max_err < 5e-3`，以各自 test 脚本为准。）
 
 ***
 
@@ -236,13 +237,13 @@ K 维累加精度损失的标准做法。Python 基准同样在乘加前升 fp32
 
 **官方 / 项目来源：**
 
-- Triton 官方：<https://triton-lang.org/>
+- Triton 官方：[https://triton-lang.org/](https://triton-lang.org/)
 
-- triton-ascend（昇腾后端）：<https://github.com/triton-lang/triton-ascend>
+- triton-ascend（昇腾后端）：[gitcode.com/Ascend/triton-ascend](https://gitcode.com/Ascend/triton-ascend)（昇腾官方仓库，examples/triton_ascend 的安装源即此）
 
-- TileLang 官方：<https://github.com/tile-ai/tilelang>
+- TileLang 官方：[https://github.com/tile-ai/tilelang](https://github.com/tile-ai/tilelang)
 
-- 华为昇腾 Ascend C 官方：<https://www.hiascend.com/cann/ascend-c>
+- 华为昇腾 Ascend C 官方：[https://www.hiascend.com/cann/ascend-c](https://www.hiascend.com/cann/ascend-c)
 
-- 华为昇腾 CANN 文档中心：<https://www.hiascend.cn/document>
+- 华为昇腾 CANN 文档中心：[https://www.hiascend.cn/document](https://www.hiascend.cn/document)
 

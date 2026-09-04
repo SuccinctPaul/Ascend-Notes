@@ -254,7 +254,7 @@ flowchart LR
 
 ## 八、四家 Softmax 实现 & 性能与 Roofline 分析 (Ascend 910B2 / CANN 9.0.0)
 
-> 数据生成时间: 2026-09-03；测试主机: `vllm-hust-cyj-21rc-cloud-container-86`；CANN=9.0.0，NPU=Ascend 910B2。 每档 (M×D) 取 15 次最佳耗时 (ms)。
+> 数据生成时间: 2026-09-03；测试主机: 云端容器实例（与仓库主测机不同环境）；CANN=9.0.0，NPU=Ascend 910B2。 每档 (M×D) 取 15 次最佳耗时 (ms)。
 > **说明 (2026-09-03)**: `bench_softmax.py` 完整性能脚本（对齐 GELU 的 `--which=both` / `--repeats=15` 双分支口径）尚未在服务器端跑完全量 7 档；§8.4 性能表先使用 **已验证 smoke 档的实估值 + 插值**，同时在单元格中用 `⚠ 占位` 标记，等后续 `examples/bench_softmax_full.json` 产出后一次回填。正确性数据 (§8.2) 为服务器实测，非占位。
 
 本节覆盖本项目实现的四种 Softmax front-end：
@@ -321,11 +321,18 @@ Pass 3 (normalize):
 
 每个 1D kernel 分配一个 AI Core 负责完整的一行特征（D ≤ BLOCK 时一整行驻留 UB）。核内分 4 个 phase：
 
+> ⚠️ **注意（与仓库现状对齐）**：下面代码镜像 `softmax_tilelang.py` 的现状——用
+> `T.alloc_local` 接 `T.copy(GM→UB)`。但同样的组合在 GELU 上对 tilelang-ascend
+> v0.1.1.010 实测会抛 `Unsupported scope: src=global, dst=local`（坑 #TL-2，见
+> [GELU 篇 §8.10.4](/ops/05-gelu)）；跑不通时先把 `T.alloc_local` 改成 `T.alloc_ub`
+>（对照 [TileLang 篇 §5.1](/dsl/03-tilelang-ascend) 的 GELU 写法）。同理，Phase 3 直接用
+> fp16 累加 `sum` 在长行上会放大舍入误差（本文 §四 "fp32 累加" 小节），教学从简，生产实现应在 fp32 上累加。
+
 ```python
 @T.prim_func
 def main(X: T.Tensor((D,), fp16), Y: T.Tensor((D,), fp16)):
   with T.Kernel(num_blocks=1) as cid:
-    X_UB = T.alloc_local((BLOCK,), fp16)   # UB 内缓冲
+    X_UB = T.alloc_local((BLOCK,), fp16)   # 旧写法, 待迁移: 报 Unsupported scope 时改 T.alloc_ub
     Y_UB = T.alloc_local((BLOCK,), fp16)
     M_UB = T.alloc_local((1,), fp16);  S_UB = T.alloc_local((1,), fp16);  INV_UB = T.alloc_local((1,), fp16)
 
@@ -346,9 +353,9 @@ def main(X: T.Tensor((D,), fp16), Y: T.Tensor((D,), fp16)):
     T.copy(Y_UB, Y[start:start+BLOCK])                     # UB → GM
 ```
 
-> **备注 1 (NameError workaround)**: TileLang 0.1.13 在 `@T.prim_func` 参数注解解析时会手动调用 `typing._eval_type(annotation, globalns=func.__globals__, localns={})`，把闭包参数 `D / BLOCK / dtype` 解析成 NameError。本实现的 workaround 是在 `softmax_1d` 外层函数里临时把这 3 个符号塞进 `sys.modules[__name__].__dict__`，`@T.prim_func` 定义完再还原（见 `softmax_tilelang.py` L50-L115）。
+> **备注 1 (NameError workaround)**: tilelang-ascend v0.1.1.010 的 `@T.prim_func` 参数注解解析会手动调用 `typing._eval_type(annotation, globalns=func.__globals__, localns={})`，把闭包参数 `D / BLOCK / dtype` 解析成 NameError。本实现的 workaround 是在 `softmax_1d` 外层函数里临时把这 3 个符号塞进 `sys.modules[__name__].__dict__`，`@T.prim_func` 定义完再还原（见 `softmax_tilelang.py` L50-L115）。
 >
-> **备注 2 (TileLang 原生 ReduceMax/Sum)**: 目前本教学版未使用 `T.reduce` 原语（需确认 0.1.13 对 `fp16 -> fp16` reduce 的支持），而是在 UB 内显式 `T.serial` 串行化归约，教学上更直观，性能上等价于"单 AIV block + 标量归约"。后续升级到 TileLang 新版后，可以把 Phase 1 / Phase 3 改成两条 Reduce 指令，预计归约部分能提升 1\~2 数量级。
+> **备注 2 (TileLang 原生 ReduceMax/Sum)**: 目前本教学版未使用 `T.reduce` 原语（需确认 ascend 发行版对 `fp16 -> fp16` reduce 的支持），而是在 UB 内显式 `T.serial` 串行化归约，教学上更直观，性能上等价于"单 AIV block + 标量归约"。后续升级到 TileLang 新版后，可以把 Phase 1 / Phase 3 改成两条 Reduce 指令，预计归约部分能提升 1\~2 数量级。
 
 #### 8.1.4 Ascend C 生产版 & 标量地板版
 
@@ -624,4 +631,9 @@ bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
   （在文档中心检索"AscendC API · 向量指令"即可定位；文档地址带版本号，可能随版本迁移。）
 
 > 说明：昇腾文档地址带版本号，失效时请在 https://www.hiascend.cn/document 检索传向量指令（Vector API）。
+---
 
+## 上一篇 / 下一篇
+
+- 上一篇：[02 · RMSNorm](/ops/02-rmsnorm)
+- 下一篇：[04 · RoPE 旋转位置编码](/ops/04-rope)

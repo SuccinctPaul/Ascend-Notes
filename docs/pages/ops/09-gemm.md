@@ -1,8 +1,8 @@
 # 09 · GEMM（General Matrix Multiply）—— 本仓库的四种 DSL 实证
 
-`>` 目标读者：已经走完前面 8 篇的创新之旅，想把这套知识落到"一个真实的 GEMM kernel"上。
-`>` 本文用本仓库 Ascend-Notes 的真实实验数据（4 种 DSL）来讲 GEMM，聚焦矩阵乘复用、tiling、Cube 16×16 MAC。
-`>` 前置：请先看仓库 README.md 与 CONTEXT.md。
+> 目标读者：已经走完前面 8 篇的创新之旅，想把这套知识落到"一个真实的 GEMM kernel"上。
+> 本文用本仓库 Ascend-Notes 的真实实验数据（4 种 DSL）来讲 GEMM，聚焦矩阵乘复用、tiling、Cube 16×16 MAC。
+> 前置：请先看仓库 [README](https://github.com/SuccinctPaul/Ascend-Notes/blob/main/README.md) 与[术语表](/reference/context)。
 
 ---
 
@@ -41,9 +41,9 @@ C[i,j] = Σ_{k=0}^{K-1} A[i,k]·B[k,j]      （每条 C[i,j] 是 A 一行 × B �
 1. **分块（tiling）**：巨大矩阵分成能装进片上缓冲（L0A/L0B/L0C/UB）的小块；
 2. **数据复用（matrix multiply reuse）**：把搬上片的 A/B 小块尽量反复用，别频繁回 GM 取。
 
-这两件事又都要靠**DMA 显式搬运 + 同步**把它串起来——这正是 CONTEXT.md 全篇描述的数据流。
+这两件事又都要靠**DMA 显式搬运 + 同步**把它串起来——这正是 [术语表](/reference/context) 全篇描述的数据流。
 
-`>` 人话：Cube 是个吃"矩阵小块"的大胃王，分块保证喂得饱，复用保证不用老回仓库取菜。
+> 人话：Cube 是个吃"矩阵小块"的大胃王，分块保证喂得饱，复用保证不用老回仓库取菜。
 
 ---
 
@@ -106,7 +106,7 @@ with T.Scope("C"):                     # Cube 执行域
 
 实例：`block_M=block_N=128，K_L1=64`。
 
-`>` 四种 DSL 的**抽象梯子**（CONTEXT.md）：Ascend C 管字节级 → Triton 管块级（编译器定缓冲）→ TileLang 管调度（显式指定 L1/L0C 与搬运）→ Python 只管数学正确。
+> 四种 DSL 的**抽象梯子**（[术语表](/reference/context)）：Ascend C 管字节级 → Triton 管块级（编译器定缓冲）→ TileLang 管调度（显式指定 L1/L0C 与搬运）→ Python 只管数学正确。
 
 ---
 
@@ -121,9 +121,9 @@ with T.Scope("C"):                     # Cube 执行域
 
 - 正确性校验口径（README）：所有 kernel 与 CPU 参考基准 `allclose(atol=1e-2, rtol=1e-2)` 后打印 PASS/FAIL。
 - **最直观的对照**：Python 朴素三重循环 4.27 秒，Triton 分块 + Cube 只需 **0.79 毫秒**，TileLang 显式调度更进一步到 **0.38 毫秒**——“不优化 vs 用上硬件分块与 Cube”的差距是几个数量级。
-- SCORE 的 `max_abs_error` 都在 fp16 容差内（tilelang 的 9.77e-04 亦远小于 atol=1e-2）。
+- 四组 `max_abs_error` 都在 fp16 容差内（tilelang 的 9.77e-04 亦远小于 atol=1e-2）。
 
-`>` 人话：同是"一个矩阵乘"，会分块、会喂 Cube 的写法，比傻算快上万倍。性能差距不来自数学，来自"数据怎么搬、算力怎么喂"。
+> 人话：同是"一个矩阵乘"，会分块、会喂 Cube 的写法，比傻算快上万倍。性能差距不来自数学，来自"数据怎么搬、算力怎么喂"。
 
 ---
 
@@ -150,23 +150,23 @@ flowchart LR
 
 ### 6.2 tiling / 分块：Cube 16×16 的物理约束
 
-Cube 的 MAC 阵列是 **16×16×16**：一次做 16×16 个 A×B，硬件一次 Output 16×16 并累加（见 CONTEXT.md MAC 阵列描述）。这带来两条铁律：
+Cube 的 MAC 阵列是 **16×16×16**：一次做 16×16 个 A×B，硬件一次 Output 16×16 并累加（见 [术语表](/reference/context) MAC 阵列描述）。这带来两条铁律：
 
 - **块尺寸取 16 的倍数**：仓库里 Triton `BLOCK=32`、TileLang `block_M/N=128`、`K_L1=64` 全是 16 的倍数，就是为了对齐 Cube 粒度不打折；
 - **L0A/L0B/L0C 是 Cube 专属缓冲**：数据要先进 L1，再由 L1 灌入 L0A/L0B 喂 Cube，结果累加到 L0C——Cube 只碰自己域内的缓冲。
 
-`>` 人话：16×16 是 Cube 每次能"一口算"的颗粒，所有分块都往 16 的倍数上靠，Cube 才能一口吃饱。
+> 人话：16×16 是 Cube 每次能"一口算"的颗粒，所有分块都往 16 的倍数上靠，Cube 才能一口吃饱。
 
 ### 6.3 混合精度（fp32 累加器）——这是正确性的关键
 
 三个 NPU DSL 都不约而同地：**fp16 输入输出 + fp32 累加器**。为什么？因为 K 维累加会一路加几百上千个乘积，若全程 fp16 尾数（约 11 位）加下去，小数进位不断被舍掉（**精度损失**，不是 overflow）。fp32 累加器把这些进位保住，最后再截回 fp16 存储。Python 基准 `gemm.py` 也为此在乘加前先升 fp32。
 
-`>` 人话：输入存窄的（fp16，省显存），账本花宽的（fp32，保精度）——这就是 CONTEXT.md 里的"混合精度"。
+> 人话：输入存窄的（fp16，省显存），账本花宽的（fp32，保精度）——这就是 [术语表](/reference/context) 里的"混合精度"。
 
 ### 6.4 数据流与同步：每个搬运都要有人发起
 
 - TileLang 里 `T.copy`（GM→L1）、`T.barrier_all`（搬完再算）、`T.copy(C_L0, C)`（L0C→GM）——**每一步搬运和同步都是显式**；
-- 多核并行（grid ≥ 2）时，每个 program 各算各的 C 分片、各用各的 L1/L0C，天然无核间依赖，这正是 CONTEXT.md 说的"每个 C[i,j] 只依赖 A 一行 + B 一列，故可简单按 M/N 切分给多核"。
+- 多核并行（grid ≥ 2）时，每个 program 各算各的 C 分片、各用各的 L1/L0C，天然无核间依赖，这正是 [术语表](/reference/context) 说的"每个 C[i,j] 只依赖 A 一行 + B 一列，故可简单按 M/N 切分给多核"。
 
 ### 6.5 调用链与运行环境（README）
 
@@ -182,7 +182,7 @@ Cube 的 MAC 阵列是 **16×16×16**：一次做 16×16 个 A×B，硬件一次
 - 算完第 1 块立刻切到第 2 块（数据已在），DMA 再回头填第 1 块……如此往复，把**取数的延迟藏在计算后面**。
 - Triton 里 `tl.dot` 的重叠由编译器自动调度；TileLang 里靠显式 buffer + `T.barrier_all()`（MTE2 灌完一组、MTE1 才算）配合两层缓冲来达成。仓库 README 也把"双缓冲"列为核心优化。
 
-`>` 人话：别让 Cube 对着空气等菜。DMA 一边提前把菜端到桌上（双缓冲），Cube 一边吃正在吃的菜，两边不挨饿，吞吐自然上去。
+> 人话：别让 Cube 对着空气等菜。DMA 一边提前把菜端到桌上（双缓冲），Cube 一边吃正在吃的菜，两边不挨饿，吞吐自然上去。
 
 ### 6.7 多核切分：每个 program 一条独立的流水
 
@@ -238,7 +238,7 @@ flowchart LR
 
 **本仓库（可本地核验，非外部 URL）：**
 - `README.md`（四 DSL 实测结果表、统一约定、运行环境）
-- `CONTEXT.md`（硬件架构、数据流、tiling、混合精度、Cube 16×16 MAC 术语表）
+- [术语表](/reference/context)（硬件架构、数据流、tiling、混合精度、Cube 16×16 MAC）
 - `examples/python/src/gemm.py`（CPU 参考基准）
 - `examples/triton_ascend/src/gemm_triton.py`、`examples/tilelang_ascend/src/gemm_tilelang.py`、`examples/ascend_c/`
 
@@ -250,5 +250,11 @@ flowchart LR
 - 华为昇腾 CANN 官方文档中心（Ascend C / 算子开发 / 向量与矩阵 API）：
   https://www.hiascend.cn/document
 
-`>` 说明：Cube 16×16 MAC、L0A/L0B/L0C 等硬件结构细节以仓库 CONTEXT.md 为准；昇腾文档地址带版本号，失效时请在 https://www.hiascend.cn/document 检索对应章节。
-`>` 注：README 中 ascend_c 列耗时未给出（表格为"—"），本次未对该列做任何推算，故不虚报数字。
+> 说明：Cube 16×16 MAC、L0A/L0B/L0C 等硬件结构细节以仓库 [术语表](/reference/context) 为准；昇腾文档地址带版本号，失效时请在 https://www.hiascend.cn/document 检索对应章节。
+> 注：README 中 ascend_c 列耗时未给出（表格为"—"），本次未对该列做任何推算，故不虚报数字。
+---
+
+## 上一篇 / 下一篇
+
+- 上一篇：[08 · 量化与反量化](/ops/08-quantization)
+- 本卷收官。继续读：[性能模型与 Roofline](/perf/01-roofline-perf-model) 把这里的实测数字放上屋顶；或跳到 [构建与部署说明](/deployment)。

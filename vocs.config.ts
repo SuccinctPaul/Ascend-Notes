@@ -1,33 +1,10 @@
 import { defineConfig } from 'vocs/config'
 import remarkGfm from 'remark-gfm'
-import type { RemarkPlugin } from 'vocs/config'
 
-// 解析 MDX 前，把会被误判为 JSX 的语法预处理掉：
-//   1. `<https://url>` 自动链接 → `[url](url)`（纯 Markdown 链接）
-//   2. mermaid 代码块里的 `<br/>` 等 HTML 自闭合标签 → 空格
-// 这是一个最小、零依赖的 unified remark 插件，在 tokenize 前运行。
-const remarkPreprocess: RemarkPlugin = () => (tree, file) => {
-  const value = String(file.value)
-  let out = value
-  // 1) autolinks: <https://...> or <http://...> or <mailto:...> → [link](link)
-  out = out.replace(/<(https?:\/\/[^\s>]+)>/g, (_, url) => `[${url}](${url})`)
-  out = out.replace(/<(mailto:[^\s>]+)>/g, (_, url) => `[${url}](${url})`)
-  // 2) 在 ``` 代码围栏外，把 <br/>, <br />, <br> 替换为换行；
-  //    围栏内不处理（保持代码原样），因为 Vocs 会把围栏内交给 rehype/mermaid
-  const lines = out.split('\n')
-  let inFence = false
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*```/.test(lines[i])) {
-      inFence = !inFence
-      continue
-    }
-    if (!inFence) {
-      lines[i] = lines[i].replace(/<br\s*\/?>/gi, '\n')
-    }
-  }
-  file.value = lines.join('\n') as never
-  return tree
-}
+// 注意：Vocs 把 .md 也按 MDX 编译，源文件里不能出现会被当作 JSX 的语法：
+//   - `<https://url>` 自动链接（解析期直接报错），必须写成 `[url](url)`；
+//   - 代码围栏/行内代码之外的裸 `<xxx>` 标签。
+// scripts/check-mdx.mjs 会在构建前做这道防线。
 
 export default defineConfig({
   title: 'Ascend NPU 知识库',
@@ -39,8 +16,7 @@ export default defineConfig({
   srcDir: 'docs',
   renderStrategy: 'full-static',
   markdown: {
-    // 注意顺序：preprocess 要先跑（在 mdx-jsx 之前把语法冲突去掉），再跑 GFM。
-    remarkPlugins: [remarkPreprocess, remarkGfm],
+    remarkPlugins: [remarkGfm],
   },
   iconUrl: '/icon.svg',
   socials: [
@@ -99,7 +75,7 @@ export default defineConfig({
       ],
     },
     {
-      text: '第 02/05 卷 · 性能模型与 Profiling',
+      text: '第 02 卷 · 性能模型与 Profiling',
       collapsed: false,
       items: [
         { text: '00 · 如何计算 NPU 算力', link: '/perf/00-npu-peak-flops-calculation' },
@@ -112,8 +88,11 @@ export default defineConfig({
       ],
     },
     {
-      text: '构建与部署说明',
-      link: '/deployment',
+      text: '第 05 卷 · 构建与部署',
+      items: [
+        { text: '构建与部署说明', link: '/deployment' },
+        { text: '术语表', link: '/reference/context' },
+      ],
     },
   ],
 })

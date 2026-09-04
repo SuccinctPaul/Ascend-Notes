@@ -1,8 +1,8 @@
 # 04 · Ascend C —— CANN 原生 C++ kernel DSL 核心手册
 
-`>` 面向 0 到 1 新手的「多 DSL GEMM」第四篇,也是四篇里最厚的一篇。今天我们回答
-`>` 一个问题:**写 NPU kernel 最贴近硬件的那条路,长什么样?**
-`>` **答案: Ascend C + bisheng 编译器 + ascendc.cmake 框架 + ACL 运行时,一套打完。**
+> 面向 0 到 1 新手的「多 DSL GEMM」第四篇,也是四篇里最厚的一篇。今天我们回答
+> 一个问题:**写 NPU kernel 最贴近硬件的那条路,长什么样?**
+> **答案: Ascend C + bisheng 编译器 + ascendc.cmake 框架 + ACL 运行时,一套打完。**
 
 ---
 
@@ -25,9 +25,9 @@
 | **精度策略** | fp16 输入 + fp32 累加器(混合精度),`atol=1e-2` 校验 |
 | **本仓库示例** | `examples/ascend_c/`(朴素 GEMM,NPU 实测 PASS) |
 
-`>` **人话**: Ascend C 之于昇腾,等于 CUDA C++ 之于 NVIDIA。直接写裸 C++,把
-`>` 数据搬进片上、喂给 Cube、跑完搬回 GM——每一跳搬运都是你代码里显式写的,
-`>` 性能上限最高,但也最"操心"。
+> **人话**: Ascend C 之于昇腾,等于 CUDA C++ 之于 NVIDIA。直接写裸 C++,把
+> 数据搬进片上、喂给 Cube、跑完搬回 GM——每一跳搬运都是你代码里显式写的,
+> 性能上限最高,但也最"操心"。
 
 ---
 
@@ -59,8 +59,8 @@ CANN(Compute Architecture for Neural Networks)是昇腾的全套软件栈,从下
   语法 + 几个扩展属性(`__global__` / `__aicore__` / `__gm__`)写算子,经 bisheng
   编译成 device 二进制。**取代 TBE,是当前的官方推荐写法。**
 
-`>` **人话**: Ascend C 就是"用 C++ 直接写 NPU kernel"的官方答案。早期 TBE 写
-`>` 法已经被它取代,新写的算子都用 Ascend C。
+> **人话**: Ascend C 就是"用 C++ 直接写 NPU kernel"的官方答案。早期 TBE 写
+> 法已经被它取代,新写的算子都用 Ascend C。
 
 ### 1.2 与 CUDA C++ 的类比关系
 
@@ -71,7 +71,7 @@ CANN(Compute Architecture for Neural Networks)是昇腾的全套软件栈,从下
 | kernel 入口 | `__global__ void kernel(...)` | `extern "C" __global__ __aicore__ void kernel(...)` |
 | 全局内存指针 | `float* d_A`(device 指针) | `GM_ADDR a` / `__gm__ T*` |
 | device 张量视图 | (裸指针 + 索引算) | `GlobalTensor<T>`(基址 + 长度) |
-| 片上共享内存 | `__shared__ T smem[...]` | `LocalTensor<T>` + `TQue<TPosition::VENC>` |
+| 片上共享内存 | `__shared__ T smem[...]` | `LocalTensor<T>` + `TQue<TPosition::VECIN/VECOUT/VECCALC>`(UB 对应的 TPosition) |
 | 矩阵乘硬件单元 | Tensor Core + `wmma::mma_sync` | Cube 单元 + `MatMul()` 接口 |
 | 向量运算单元 | CUDA Core(逐元素) | Vector 单元 + `Add` / `Exp` / `Muls` |
 | 多核并行 | `blockIdx.x` / `blockIdx.y` | `GetBlockNum()` / `GetBlockIdx()` |
@@ -80,9 +80,9 @@ CANN(Compute Architecture for Neural Networks)是昇腾的全套软件栈,从下
 | 运行时 | `cudart`(cudaMalloc/cudaMemcpy) | ACL(aclrtMalloc/aclrtMemcpy) |
 | host 驱动 | `cudaSetDevice / cudaStreamSynchronize` | `aclrtSetDevice / aclrtSynchronizeStream` |
 
-`>` **人话**: 几乎可以拿你写 CUDA 的肌肉记忆来写 Ascend C——`__global__` 一加,
-`>` `<<<grid,block>>>` 换成 `aclrtlaunch_<kernel>(numBlocks, stream, ...)`,剩下的
-`>` 是"昇腾硬件特有"的活:片上缓冲层级更深、Cube vs Vector 的域边界更严。
+> **人话**: 几乎可以拿你写 CUDA 的肌肉记忆来写 Ascend C——`__global__` 一加,
+> `<<<grid,block>>>` 换成 `aclrtlaunch_<kernel>(numBlocks, stream, ...)`,剩下的
+> 是"昇腾硬件特有"的活:片上缓冲层级更深、Cube vs Vector 的域边界更严。
 
 ### 1.3 bisheng 编译器、ACL 运行时、ascendc.cmake 框架三者关系
 
@@ -132,8 +132,8 @@ CANN(Compute Architecture for Neural Networks)是昇腾的全套软件栈,从下
    NPU AI Core 执行
 ```
 
-`>` **人话**: bisheng 干"编 device kernel"的活,ACL 干"host 调度运行"的活,
-`>` ascendc.cmake 是把两者缝合在一起的"打包框架"——少一个都不行。
+> **人话**: bisheng 干"编 device kernel"的活,ACL 干"host 调度运行"的活,
+> ascendc.cmake 是把两者缝合在一起的"打包框架"——少一个都不行。
 
 ---
 
@@ -593,8 +593,9 @@ kernel"和"g++ 编 host 驱动"这两件本不相干的事缝合成一个静态�
 
 直接用 bisheng 编出的 raw `.o` 缺运行时 magic header,host 直接调用
 `aclrtBinaryLoadFromFile` 加载会报 `107000 ACL_ERROR_RT_PARAM_INVALID`。
-官方 `ascendc.cmake` 框架自动完成整套打包流程,把 device 二进制合并进 host
-launch stub,生成可被 ACL 运行时加载的合法二进制。
+官方 `ascendc.cmake` 框架自动完成整套打包流程(核心是 `ascendc_pack_kernel` 打包工具;
+旧版本工具链里也见过 `merge_device_obj.py` 这类名字,作用相同——把 device 二进制合并进
+host launch stub),生成可被 ACL 运行时加载的合法二进制。
 
 #### 3.4.2 6 步流程(Mermaid)
 
@@ -653,7 +654,7 @@ CANN `host_config.cmake` 里的 SoC 映射规则:
 #### 3.4.4 CMakeLists.txt 的核心写法
 
 ```cmake
-set(ASCEND_CANN_PACKAGE_PATH $ENV{ASCEND_HOME_PATH})
+set(ASCEND_HOME $ENV{ASCEND_HOME_PATH})
 include(${ASCEND_HOME}/aarch64-linux/tikcpp/ascendc_kernel_cmake/ascendc.cmake)
 
 ascendc_library(gemm STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gemm_kernel.cpp)
@@ -663,7 +664,7 @@ target_compile_options(ascend_gemm PRIVATE -fno-fast-math)
 target_link_libraries(ascend_gemm PRIVATE gemm ascendcl runtime)
 ```
 
-四行做四件事:
+这段 CMake 做五件事:
 
 1. 引入 `ascendc.cmake` 框架。
 2. `ascendc_library(gemm STATIC ...)`:声明一个 kernel 库,框架自动跑
@@ -673,6 +674,28 @@ target_link_libraries(ascend_gemm PRIVATE gemm ascendcl runtime)
    kernel 库 + ACL 运行时库。
 5. `-fno-fast-math`:**必须加**!fp16 → fp32 提升与累加的精度依赖编译器
    不开 fast-math,否则可能引入数值不稳定。
+
+#### 3.4.5 从零构建 + 运行(可整段复制)
+
+```bash
+cd examples/ascend_c
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+cd build && ./ascend_gemm        # GEMM: NPU 执行 + 与 CPU 参考比对, 预期打印 PASS
+```
+
+同目录下还有另外三组 target,一条 `cmake --build build -j` 全部编出:
+
+```bash
+./ascend_gelu                    # GELU (op_kernel/gelu_kernel.cpp)
+./ascend_softmax                 # Softmax (op_kernel/softmax_kernel.cpp)
+./ascend_gelu_scalar             # GELU 标量地板版 (性能对照)
+```
+
+> **仓库里的生产级 kernel**:op_kernel/ 下除了朴素 GEMM,还有成体系的 GELU 迭代版
+> (gelu_v3~v6_kernel.cpp,含 tanh→exp 改写与标量地板对照)和 softmax 生产版——
+> 它们的实测性能数据见 [GELU 篇 §8.8](/ops/05-gelu)。Ascend C "性能上限最高"不是论断,
+> 把这些 kernel 编译跑起来、对照数据,就是这个论断的实证路径。
 
 ### 3.5 Ascend C 核心编程模型
 
@@ -1155,17 +1178,17 @@ __gm__ uint32_t* t = reinterpret_cast<__gm__ uint32_t*>(tiling);
   [https://www.hiascend.com/document/detail/zh/canncommercial/80rc3alpha003/operator-dev/ascendcoperatordevguide/ascendc_0001.html](https://www.hiascend.com/document/detail/zh/canncommercial/80rc3alpha003/operator-dev/ascendcoperatordevguide/ascendc_0001.html)
 - **bisheng 编译器文档**:
   [https://www.hiascend.com/document/detail/zh/canncommercial/80rc3alpha003/devtools/devtool/toolins/instins_0000.html](https://www.hiascend.com/document/detail/zh/canncommercial/80rc3alpha003/devtools/devtool/toolins/instins_0000.html)
-- **ACL API 参考**:
+- **ACL 开发指南（注意：此链接锚定 80rc3 版本；本仓库实测环境为 CANN 9.0.0，新版本文档请从 CANN 文档中心进入）**:
   [https://www.hiascend.com/document/detail/zh/canncommercial/80rc3alpha003/devref/aclpythondevg/aclpythondevg_0000.html](https://www.hiascend.com/document/detail/zh/canncommercial/80rc3alpha003/devref/aclpythondevg/aclpythondevg_0000.html)
 
 ### 本仓库文件引用
 
-- 示例代码 README:`/Users/paul/ai/Ascend-Notes/examples/ascend_c/README.md`
-- GEMM kernel 源码:`/Users/paul/ai/Ascend-Notes/examples/ascend_c/op_kernel/gemm_kernel.cpp`
-- host 驱动源码:`/Users/paul/ai/Ascend-Notes/examples/ascend_c/src/gemm_host.cpp`
-- 构建脚本:`/Users/paul/ai/Ascend-Notes/examples/ascend_c/CMakeLists.txt`
-- 代码风格:`/Users/paul/ai/Ascend-Notes/examples/ascend_c/.clang-format`
-- 静态检查:`/Users/paul/ai/Ascend-Notes/examples/ascend_c/.clang-tidy`
-- 项目术语表:`/Users/paul/ai/Ascend-Notes/docs/pages/reference/context.mdx`
-- 硬件背景:`/Users/paul/ai/Ascend-Notes/docs/pages/hardware/01-ai-core-overview.md`
-- host/device 生命周期:`/Users/paul/ai/Ascend-Notes/docs/pages/hardware/03-host-device-kernel-lifecycle.md`
+- 示例代码 README:[examples/ascend_c/README.md](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/README.md)
+- GEMM kernel 源码:[examples/ascend_c/op_kernel/gemm_kernel.cpp](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/op_kernel/gemm_kernel.cpp)
+- host 驱动源码:[examples/ascend_c/src/gemm_host.cpp](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/src/gemm_host.cpp)
+- 构建脚本:[examples/ascend_c/CMakeLists.txt](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/CMakeLists.txt)
+- 代码风格:[examples/ascend_c/.clang-format](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/.clang-format)
+- 静态检查:[examples/ascend_c/.clang-tidy](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/.clang-tidy)
+- 项目术语表:[术语表](/reference/context)
+- 硬件背景:[01 · AI Core 硬件模型全貌](/hardware/01-ai-core-overview)
+- host/device 生命周期:[03 · host/device 与 kernel 生命周期](/hardware/03-host-device-kernel-lifecycle)

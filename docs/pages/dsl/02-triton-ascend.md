@@ -77,9 +77,11 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 # 2) 创建 venv 并装 numpy + torch（pyproject.toml 锁定 torch==2.8.0, python>=3.11,<3.12）
 cd triton_ascend && uv venv --python 3.11 && uv sync
 
-# 3) 手动装 torch_npu + triton-ascend（不在标准 PyPI 上可直接解析）
+# 3) 手动装 torch_npu + triton-ascend（aarch64 + cp311 wheel 在 PyPI 通常可直接解析；
+#    若解析不到，从昇腾官方渠道下载 wheel 或源码安装）
 uv pip install torch_npu        # 2.8.0rc1, 必须与 torch 严格一致
-uv pip install triton-ascend    # 3.2.0; 失败则源码: git clone + pip install -e .
+uv pip install triton-ascend    # 3.2.0; 失败则源码安装:
+#   git clone https://gitcode.com/Ascend/triton-ascend.git && pip install -e ./triton-ascend
 
 # 4) 验证
 uv run python -c "import torch, torch_npu, triton; print(torch.npu.is_available())"  # → True
@@ -268,6 +270,15 @@ def softmax_kernel(x_ptr, y_ptr, M, D, stride_xm, stride_xd,
 
 ### 7. 正确性验证与性能测试
 
+运行方式（在 `examples/triton_ascend/` 下）：
+
+```bash
+uv run python src/test_gemm.py        # GEMM 正确性 (对 torch.matmul, allclose 1e-2)
+uv run python src/test_gelu.py        # GELU 正确性
+uv run python src/test_softmax.py     # Softmax 正确性
+uv run python src/bench_gelu_triton.py --out bench_gelu_triton.json   # GELU 性能基准
+```
+
 #### 7.1 `test_gemm.py`：torch.matmul 作为 NPU 参考
 
 ```python
@@ -361,7 +372,7 @@ def bench_one(x_npu, y_npu, block_size, warmup, repeats):
    ↑ L1/L0A/L0B/L0C 编译器自动调度, 代码里看不见
 ```
 
-> **人话**：和 [硬件架构图 B](/reference/context#图-b-数据流) 对照——Triton 把整个
+> **人话**：和[术语表的硬件数据流图](/reference/context)对照——Triton 把整个
 > GM → L1 → L0A/B → Cube → L0C → GM 这条数据流**压缩成了 `tl.load / tl.dot / tl.store` 三个 op**。
 > 简洁是简洁了，但你失去了对每一跳的精细控制。
 
@@ -438,11 +449,11 @@ A: CANN 9.0.0 把该 enum 重命名为 `RT_LIMIT_TYPE_SIMT_DVG_WARP_STACK_SIZE`�
 - [昇腾 CANN 官方文档](https://www.hiascend.com/document)
 
 ### 本仓库文件
-- 示例代码：[`examples/triton_ascend/README.md`](https://github.com/paul/Ascend-Notes/tree/main/examples/triton_ascend)
-- GEMM kernel：[`examples/triton_ascend/src/gemm_triton.py`](https://github.com/paul/Ascend-Notes/tree/main/examples/triton_ascend/src/gemm_triton.py)
-- GELU kernel：[`examples/triton_ascend/src/gelu_triton.py`](https://github.com/paul/Ascend-Notes/tree/main/examples/triton_ascend/src/gelu_triton.py)
-- Softmax kernel：[`examples/triton_ascend/src/softmax_triton.py`](https://github.com/paul/Ascend-Notes/tree/main/examples/triton_ascend/src/softmax_triton.py)
-- GEMM 正确性测试：[`examples/triton_ascend/src/test_gemm.py`](https://github.com/paul/Ascend-Notes/tree/main/examples/triton_ascend/src/test_gemm.py)
-- GELU 性能基准：[`examples/triton_ascend/src/bench_gelu_triton.py`](https://github.com/paul/Ascend-Notes/tree/main/examples/triton_ascend/src/bench_gelu_triton.py)
+- 示例代码：[`examples/triton_ascend/README.md`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend)
+- GEMM kernel：[`examples/triton_ascend/src/gemm_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/gemm_triton.py)
+- GELU kernel：[`examples/triton_ascend/src/gelu_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/gelu_triton.py)
+- Softmax kernel：[`examples/triton_ascend/src/softmax_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/softmax_triton.py)
+- GEMM 正确性测试：[`examples/triton_ascend/src/test_gemm.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/test_gemm.py)
+- GELU 性能基准：[`examples/triton_ascend/src/bench_gelu_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/bench_gelu_triton.py)
 - 术语对齐：[术语表 / 硬件架构](/reference/context)
 - 总览入口：[00 · 四种 DSL 核心手册总览](/dsl/00-dsl-overview)

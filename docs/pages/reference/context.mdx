@@ -1,28 +1,14 @@
-# Ascend-Notes (multi-DSL GEMM on Ascend NPU)
+# 术语表
 
-这是一个多 DSL 的 GEMM kernel 学习项目:用 4 种不同的编程语言/DSL(python、ascend_c、
-triton_ascend、tilelang_ascend)在昇腾 NPU 上实现同一个 `C = A @ B`,并使它们输出与
-CPU 参考基准一致。本术语表钉住理解这些 kernel 所需的领域语言。
+本术语表钉住全站使用的领域语言：硬件架构、数据流、host/device 两级系统、混合精度与 DSL 抽象梯子。
+所有词条以本页为唯一权威口径，各篇文档与这里冲突时，以此页为准。
 
+对应的教学展开：
 
-## Overview
-
-```text
-M1  硬件架构全貌
-     AI Core 集群 / AI CPU / DMA / GM(HBM) / 片上存储(UB·L1·L0)
-     —— 算子跑在什么样的"物理世界"里
-
-M2  两级系统分工        ← 我们已走到这里的 60%
-     host 指挥 / device 干活 / 异步提交 / 同步 / kernel handle
-
-M3  算子完整生命周期
-     需求 → 设计 → tiling → kernel → host → 编译(ascendc_library)
-     → 加载 → launch → 验证 → 调优 → 部署
-     —— 一个算子从出生到上线，走完哪些站
-
-M4  算子分类
-     计算算子 / 通信算子 / 图算融合 —— 我们的 GEMM 属于哪类、为什么
-```
+- 硬件模型 → [第 01 卷 · AI Core 硬件模型全貌](/hardware/01-ai-core-overview)
+- 数据流与存储层级 → [存储层级与访问权域](/hardware/02-storage-hierarchy)
+- host/device 分工与算子生命周期 → [host/device 与 kernel 生命周期](/hardware/03-host-device-kernel-lifecycle)
+- 性能术语（峰值算力 / Roofline）→ [第 05 卷 · 性能模型](/perf/01-roofline-perf-model)
 
 ## 硬件架构
 
@@ -87,26 +73,25 @@ flowchart TB
 ```mermaid
 flowchart LR
     A1["① 数据躺在 GM"]
-    A2["②a 直达: DMA GM→L1 (核内私有数据) ②b 跨核才绕: DMA 经共享存储"]
-    A3["③ DMA → 核内 L1 (统一缓存)"]
-    A4["④ 灌入 → L0A / L0B (Cube 域输入)"]
-    A5["⑤ Cube 取数计算 16×16 (Cube 引擎)"]
-    A6["⑥ 结果累加到 L0C (fp32) (Cube 域累加器)"]
-    A7["⑦ 若需 Vector 加工: DMA 跨域 L0C → UB"]
-    A8["⑧ Vector 在 UB 上做 ReLU 等 (Vector 域)"]
-    A9["⑨ DMA 搬回 GM"]
+    A2["② DMA GM→L1: 单核私有数据直达; 确需跨核交换才经片上共享存储中转"]
+    A3["③ L1 灌入 → L0A / L0B (Cube 域输入)"]
+    A4["④ Cube 取数计算 16×16 (Cube 引擎)"]
+    A5["⑤ 结果累加到 L0C (fp32) (Cube 域累加器)"]
+    A6["⑥ 若需 Vector 加工: DMA 跨域 L0C → UB"]
+    A7["⑦ Vector 在 UB 上做 ReLU 等 (Vector 域)"]
+    A8["⑧ DMA 搬回 GM"]
 
-    A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8 --> A9
+    A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8
 ```
 
 **数据流要点：**
 - ①→⑥ 是 **Cube 通路**（纯矩阵乘），全程没离开 Cube 域。
-- **② 是"可选分叉"**：单核私有数据走 ②a 直达 GM→L1；只有**确实要跨核交换**时才走 ②b 绕共享存储（GEMM 每核各算各的 C，通常用不到）。
-- ⑦→⑧ 是 **可选的 Vector 加工通路**，只有做 ReLU/归一化这类逐元素操作时才走；**必须经 DMA 跨域把 L0C 搬进 UB**。
-- ⑨ 回写 GM 同样走 DMA。
+- **② 的跨核分支是"可选"**：单核私有数据直达 GM→L1；只有**确实要跨核交换**时才绕片上共享存储（GEMM 每核各算各的 C，通常用不到）。
+- ⑥→⑦ 是 **可选的 Vector 加工通路**，只有做 ReLU/归一化这类逐元素操作时才走；**必须经 DMA 跨域把 L0C 搬进 UB**。
+- ⑧ 回写 GM 同样走 DMA。
 - **每一步的"搬运"，都是 kernel 代码显式发起的**——这就是"搬运是显式的"。
 
-### M1 · 讲解正文（图文对照）
+### 讲解正文（图文对照）
 
 **一、三层世界的心智模型**
 ```
@@ -125,7 +110,7 @@ flowchart LR
 └──────────────────────────────────┘   ← 图二
 ```
 **核心心法：数据离算力越近越快，但容量越小。** 高性能算子只做一件事——尽量把数据搬进
-片上、反复复用，别老回 GM 去取。这就是"GM 访问下降 N 倍"的硬件根源。
+片上、反复复用，别老回 GM 去取。这就是"优化前后 GM 访问量能差 N 倍"的硬件根源。
 
 **二、图 B 解读：数据怎么进 Cube**
 图 B 是"数据通关地图"，①-⑨ 每一步都是显式 DMA 搬运或同步：
@@ -164,8 +149,8 @@ sequenceDiagram
 
     rect rgb(240,240,245)
     Note over Dev,Dev2: 阶段一：开发期 —— 只做一次
-    Dev->>ACL: ① bisheng 编译 kernel 源码 → 二进制(.o)
-    Dev->>ACL: ② ascendc_library 打包成 kernel 产物(可加载的二进制)
+    Dev->>Dev: ① bisheng 编译 kernel 源码 → 二进制(.o)
+    Dev->>Dev: ② ascendc_library 打包成 kernel 产物(可加载的二进制)
     end
 
     rect rgb(255,248,240)
@@ -176,7 +161,7 @@ sequenceDiagram
     Host->>ACL: ⑥ aclrtlaunch_gemm_kernel(handle, args) ⚠️ 只是"下发任务"，CPU 立刻返回
     ACL->>Dev2: ⑦ 把任务提交到 NPU 任务队列
     Note over Host,Dev2: ⑧ CPU 继续干别的，不等 NPU
-    Dev2->>Dev2: ⑨ AI Core 执行 kernel(算 tiling→切核→搬运→Cube)
+    Dev2->>Dev2: ⑨ AI Core 执行 kernel(读 tiling→切核→搬运→Cube)
     Host->>ACL: ⑩ aclrtSynchronizeStream(stream) 阻塞等待 NPU 全部完成
     ACL->>Host: ⑪ 返回(任务完成)
     Host->>ACL: ⑫ 把结果从 device GM 拷回 host
@@ -187,59 +172,56 @@ sequenceDiagram
 
 ## NPU架构
 ```
-┌─────────────────────── AI Core ───────────────────────┐
-│  ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌───────┐ │
-│  │  Cube   │   │ Vector  │   │  Scalar │   │  DMA  │ │
-│  │ 单元    │   │ 单元    │   │  标量   │   │ 搬移  │ │
-│  │(矩阵乘) │   │(向量)   │   │(控制)   │   │(搬运) │ │
-│  └────┬────┘   └────┬────┘   └────┬────┘   └───┬───┘ │
-│       └─────────────┼──────────────┼────────────┘     │
-│              ┌──────┴──────┐   ┌───┴────┐             │
-│              │  L0A / L0B  │   │ L0C    │   ← 片上缓存 │
-│              │  L1 缓存    │   └────────┘             │
-│              └─────────────┘                          │
-│                    ↘                ↗                  │
-│              ┌──────────────────┐                     │
-│              │   UB 统一缓冲区  │  ← 计算的"工作台"    │
-│              └──────────────────┘                     │
-└───────────────────────────────────────────────────────┘
+┌──────────────────── AI Core（每核私有） ─────────────────────┐
+│                                                              │
+│  ┌────────┐  ┌─────────┐  ┌──────┐                           │
+│  │  Cube  │  │ Vector  │  │Scalar│      四个引擎各司其职       │
+│  │(矩阵乘)│  │(逐元素) │  │(控制)│                           │
+│  └─┬────┬─┘  └───┬────┘  └──────┘  ┌─────┐                 │
+│    │    │        │                 │ DMA │ ← 唯一搬运工      │
+│    │    │     ┌──┴──┐             └──┬──┘                 │
+│    │    │     │ UB  │ ← Vector 的工作台│                    │
+│    │    │     └─────┘                 │                    │
+│  L0A  L0C                            │                    │
+│  L0B  (Cube 域缓冲)                  │                    │
+│    │    │                            │                    │
+│  ┌─┴────┴────────────────┐           │                    │
+│  │ L1 统一缓存            │ ← 不属于任何单一引擎域，        │
+│  │ (Cube 与 Vector 共用)  │    Cube/Vector 都从它取数       │
+│  └───────────┬───────────┘           │                    │
+└──────────────┼───────────────────────┼────────────────────┘
+               │      所有跨层搬运都经 DMA                    │
+        ┌──────┴───────────────────────┴──────┐
+        │           GM / HBM（全核共享）        │
+        └─────────────────────────────────────┘
 ```
 
-四个引擎各司其职：
+**Cube 单元（硬件矩阵乘法引擎）**：不是逐元素算乘加，而是专用引擎——一次调用就算出 16×16 = 256 个输出元素的矩阵乘 `C += A·B`。A 分块 16×16、B 分块 16×16，硬件一个周期算出 C 分块 16×16；输入 fp16，片内 fp32 累加（见[混合精度](#混合精度-mixed-precision)词条）；中间结果暂存在 L0C（Cube 的专用累加缓冲）。
 
-Cube 单元：干矩阵乘法，一次能算一个 16×16×16 的小矩阵块（MAC 阵列），这是速度之王。
+![Cube 单元：一次 16×16 输出分块，fp16 输入、fp32 在 L0C 累加](/Ascend-Notes/cube-unit-16x16.png)
 
-### Cube 单元：硬件矩阵乘法引擎
-Cube 不是逐元素算乘加的，而是一个硬件专用引擎，一次调用就能算出 16×16 = 256 个输出元素的矩阵乘 C += A·B。
+**Vector 单元**：做逐元素运算（加法、激活、归一化），一次处理一批元素。
 
-A 分块 16×16，B 分块 16×16，硬件在一个周期内算出 C 分块 16×16。
-输入是 fp16，但在片内用 fp32 累加（对应你之前学的精度知识）。
-中间结果暂存在 L0C（Cube 的专用累加缓冲）。
+**Scalar 单元**：跑循环控制、地址计算、判断。
 
-![ai_core_cube_16x16.png](../assets/ai_core_cube_16x16.png)
+**DMA 引擎**：把数据从 GM 搬进片上缓存、再把结果搬回去——它不计算，只搬运。
 
-### Vector 单元：做逐元素运算（加法、激活、归一化），一次处理一批元素。
-
-### Scalar 单元：跑循环控制、地址计算、判断。
-
-### DMA 引擎：负责把数据从外存（GM）搬进片上缓存，再把结果搬回去——它不计算，只搬运。
-
-数据流是这样走的：GM（全局内存）→ L1 → L0A/L0B → Cube → L0C → UB → GM。
+数据流：GM（全局内存）→ L1 → L0A/L0B → Cube → L0C → UB → GM。
 
 
-![img.png](../assets/img.png)
+![TileLang GEMM 调度时序：DMA 搬运与 Cube 计算并行，barrier 负责同步](/Ascend-Notes/tilelang-gemm-schedule.png)
 
 
-## Language
+## 术语词条 · 硬件与数据流
 
 **GM (Global Memory)**:
-昇腾的全局内存,即 HBM 显存,容量大但带宽有限。kernel 通过 `GlobalTensor`/`GM_ADDR`
+昇腾的全局内存(物理上通常是 HBM),容量大但带宽有限。kernel 通过 `GlobalTensor`/`GM_ADDR`
 访问它。类比 CPU 的 RAM。
-_Avoid_: 显存、HBM buffer
+_Avoid_: 主存、内存条
 
 **片上缓冲 (on-chip buffer, L1 / L0C / UB)**:
 昇腾 AI Core 上的高速片上存储,由 **kernel 代码显式管理**——不是硬件自动 cache。
-数据必须由 DMA(`T.copy` / `CopyData`)显式搬入,用完再搬回。这是 NPU 与 CPU cache
+数据必须由 DMA(`T.copy` / `DataCopy`)显式搬入,用完再搬回。这是 NPU 与 CPU cache
 最本质的区别。
 _Avoid_: on-chip cache、片上缓存
 
@@ -262,8 +244,9 @@ Cube 算完的 L0C 结果,常须先搬到 UB,Vector 才能加工。
 _Avoid_: 统一缓存、UB buffer
 
 **片上共享存储 (on-chip shared storage)**:
-芯片级中层内存,**AI Cores 之间交换数据的"中转站"**。核 A 的中间结果经它转给核 B。
-跨核数据必须经过它,这就是数据要"穿过两层 DMA"(GM→共享存储→L1)的原因。
+芯片级中层内存,**AI Cores 之间交换数据的"中转站"**。核 A 的中间结果经它转给核 B,
+跨核数据不经它不能直达(单核私有的 GM→L1 搬运则无需经过)。
+> 本词条属本仓库的教学模型;跨核通路的确切硬件形态官方资料较少,细节待核验。
 _Avoid_: 共享缓存、L2
 
 **AI CPU**:
@@ -325,8 +308,9 @@ _Avoid_: 精度溢出、overflow、累加溢出
 _Avoid_: 分片、blocking
 
 **抽象梯子 (abstraction ladder)**:
-四种 DSL 对内存层级/搬运的控制颗粒度不同:ascend_c 管字节级(逐元素)、triton 管块级
-(编译器决定缓冲)、tilelang 管调度(显式指定 L1/L0C 与搬运)。
+四种 DSL 对内存层级/搬运的控制颗粒度不同:python 只管数学正确(CPU 基准,无 NPU)、
+triton 管块级(编译器决定缓冲)、tilelang 管调度(显式指定 L1/L0C 与搬运)、
+ascend_c 管字节级(每一跳搬运都手写)。详见 [四种 DSL 总览](/dsl/00-dsl-overview)。
 _Avoid_: 抽象层级、抽象程度
 
 ## 两级系统 (host / device)
@@ -334,8 +318,8 @@ _Avoid_: 抽象层级、抽象程度
 昇腾算子运行时是**两级体系**:host(CPU)与 device(NPU)分工不同,中间隔着异步任务队列。
 
 **host (主机 / CPU)**:
-昇腾算式中跑在 CPU 上的部分。它**不执行 kernel**,只负责:①计算 tiling 参数;②把
-输入数据拷入 device 的 GM;③下发任务(异步提交);④显示同步等待结果。类比"教练"。
+昇腾体系里跑在 CPU 上的部分。它**不执行 kernel**,只负责:①计算 tiling 参数;②把
+输入数据拷入 device 的 GM;③下发任务(异步提交);④显式同步等待结果。类比"教练"。
 _Avoid_: 启动端、主控端
 
 **device (昇腾处理器 / NPU)**:
@@ -350,7 +334,7 @@ _Avoid_: 分块数据、tiling 数据
 **异步提交 (asynchronous launch)**:
 `aclrtlaunch_*` 的本质动作:CPU 把 kernel 任务**提交进 NPU 的任务队列**,然后**立刻返回、
 不等 NPU 跑完**。CPU 与 NPU 由此**并行**。launch 不是"调用",而是"投递任务单"。
-_Avoid_: 调用、下发 kernel、launch(英文)
+_Avoid_: 把它当成普通函数"调用"
 
 **同步 (synchronize)**:
 `aclrtSynchronizeStream` 等显式操作,阻塞 CPU 直到 NPU 上的一批任务全部完成。因为
@@ -366,3 +350,9 @@ _Avoid_: kernel 指针、kernel id
 昇腾的运行时库,提供 `aclrtLoadKernel` / `aclrtLaunch*` / `aclrtSynchronizeStream` 等
 API,是 host 与 device 之间的桥梁。kernel 的编译加载、任务排队、结果同步都经它完成。
 _Avoid_: 引擎、框架
+
+## 术语词条 · host / device 以外的常见疑问
+
+- **"tiling 参数是谁算的？"** host 在 CPU 上算好、写进 device 可见的 GM，kernel 启动后读取——host 算、device 用。详见 [host/device 与 kernel 生命周期](/hardware/03-host-device-kernel-lifecycle)。
+- **"为什么不能在 L0C 上直接做 ReLU？"** L0C 属 Cube 域、ReLU 是逐元素操作属 Vector 域，引擎只能碰自己域内缓冲，必须经 DMA 把数据搬进 UB 再由 Vector 加工（见上文图 A/B）。
+- **"910B 的峰值算力怎么算？"** 见 [如何计算 NPU 算力](/perf/00-npu-peak-flops-calculation)。

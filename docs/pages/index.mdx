@@ -11,10 +11,10 @@
 
 ## TL;DR
 
-- **五卷一站式手册**：硬件架构 → 性能模型 → 四种 DSL 核心手册 → LLM 算子实战 → Profiling 与调优。
+- **五卷一站式手册**：硬件架构 → 性能模型 → 四种 DSL 核心手册 → LLM 算子实战 → 构建部署与术语表。
 - **四种 DSL 并列**：Python（基准）→ Triton（块级自动）→ TileLang（显式调度）→ Ascend C（全手动）。
 - **实测对照**：Python 朴素 4.27 s → Triton 0.79 ms → TileLang 0.38 ms（128³ fp16, Ascend 910B2）。
-- 每篇文档统一骨架：TL;DR + Background + Why + 正文 + 图表 + FAQ + 末尾汇总 + Reference。
+- 篇目遵循清晰的固定骨架：DSL 卷为「TL;DR → Background → Why → 正文 → 图表 → FAQ → 汇总 → 参考资料」，硬件/算子卷为「概述 → 定义 → 为什么 → 要点 → 常见误区 → TL;DR → 参考资料」。
 - 全中文，Mermaid 架构图 + ASCII 心法图并存，面向新手友好。
 
 ---
@@ -23,20 +23,20 @@
 
 ```mermaid
 flowchart LR
-    A["第 01 卷\n硬件架构"] --> B["第 02 卷\n性能模型"]
-    B --> C["第 03 卷\n四种 DSL 手册"]
-    C --> D["第 04 卷\n算子实战"]
-    D --> E["第 05 卷\nProfiling"]
+    A["第 01 卷<br/>硬件架构"] --> B["第 02 卷<br/>性能模型"]
+    B --> C["第 03 卷<br/>四种 DSL 手册"]
+    C --> D["第 04 卷<br/>算子实战"]
+    D --> E["第 05 卷<br/>构建与部署"]
     
     A1["AI Core / 存储 / host-device"] --> A
     B1["Roofline / 峰值算力 / Tiling"] --> B
     C1["Python → Triton → TileLang → Ascend C"] --> C
     D1["GEMM / Softmax / FlashAttention / ..."] --> D
-    E1["msProf / 瓶颈定位 / 调优"] --> E
+    E1["部署 / 环境搭建"] --> E
 ```
 
-`>` **人话**：先懂硬件（算子跑在什么物理世界里），再懂性能模型（怎么算天花板），
-`>` 然后学四种 DSL（怎么写 kernel），接着看算子实战（怎么优化），最后学 Profiling（怎么定位瓶颈）。
+> **人话**：先懂硬件（算子跑在什么物理世界里），再懂性能模型（怎么算天花板），
+> 然后学四种 DSL（怎么写 kernel），接着看算子实战（怎么优化），最后学 Profiling（怎么定位瓶颈）。
 
 ### 新手推荐路径
 
@@ -61,7 +61,7 @@ flowchart LR
 
 ---
 
-## 第 02 卷 · 性能优化与 Profiling
+## 第 02 卷 · 性能模型与 Profiling
 
 讲清楚「如何分析一个 NPU 算子的性能瓶颈并优化」。
 
@@ -93,13 +93,13 @@ flowchart LR
 flowchart LR
     subgraph LADDER["抽象梯子（从高到低）"]
         direction LR
-        PY["Python\n只管数学正确"] --> TR["Triton\n编译器自动搬"]
-        TR --> TL["TileLang\n显式调度 L1/L0C"]
-        TL --> AC["Ascend C\n每一搬都手写"]
+        PY["Python<br/>只管数学正确"] --> TR["Triton<br/>编译器自动搬"]
+        TR --> TL["TileLang<br/>显式调度 L1/L0C"]
+        TL --> AC["Ascend C<br/>每一搬都手写"]
     end
 ```
 
-`>` **人话**：抽象越高写得越简单但控制力越弱，抽象越低控制力越强但开发成本越高。
+> **人话**：抽象越高写得越简单但控制力越弱，抽象越低控制力越强但开发成本越高。
 
 ### 四种 DSL 速查表
 
@@ -136,7 +136,7 @@ flowchart LR
 
 | 篇目 | 内容 |
 |---|---|
-| [构建与部署说明](/deployment) | 环境要求、CANN 配置、运行方式 |
+| [构建与部署说明](/deployment) | 文档站构建、GitHub Pages 部署、NPU 开发环境要点 |
 | [术语表](/reference/context) | 全仓库术语权威定义 |
 
 ---

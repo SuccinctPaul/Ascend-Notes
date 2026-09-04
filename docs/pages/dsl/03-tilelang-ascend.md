@@ -1,8 +1,7 @@
 # 03 · TileLang on Ascend 核心手册
 
-`>` 面向 0 到 1 新手的「昇腾 NPU 四种 DSL」第三篇。今天我们回答一个问题：
-`>` **如果 Triton"块级 + 编译器自动搬运"还嫌不够、想自己控制每一级片上缓冲和 Cube
-`>`** **调用,该用哪条路?** 答案就是 **TileLang + tilelang-ascend**。
+> 面向 0 到 1 新手的「昇腾 NPU 四种 DSL」第三篇。今天我们回答一个问题：
+> **如果 Triton 的"块级 + 编译器自动搬运"还不够、想自己控制每一级片上缓冲和 Cube 调用，该用哪条路？** 答案就是 **TileLang + tilelang-ascend**。
 
 ***
 
@@ -31,8 +30,8 @@ CANN 9.0.0),是该规模四种 DSL 里最快的写法。
 | **本仓库实测**   | 128³ GEMM 0.38 ms,9.77e-04 误差,PASS                                                     |
 | **典型场景**    | 需要精确控制 L1/L0C 分配与流水线调度的高性能 kernel                                                      |
 
-`>` **人话**:TileLang 让你用 Python 写 kernel,但"搬进哪级缓存、何时同步、Cube 何时算"
-`>` 全是你说了算——不是编译器替你决定。控制力比 Triton 强,写起来比 Ascend C 容易。
+> **人话**:TileLang 让你用 Python 写 kernel,但"搬进哪级缓存、何时同步、Cube 何时算"
+> 全是你说了算——不是编译器替你决定。控制力比 Triton 强,写起来比 Ascend C 容易。
 
 ***
 
@@ -88,8 +87,8 @@ lower 成 AscendNPU IR 上的 buffer 分配 + DMA + Cube 矩阵乘调用,最终�
 | **抽象层级**    | 中(块级)                  | 中低(调度级)                           |
 | **底层 IR**   | MLIR/LLVM              | TVM                               |
 
-`>` **人话**:Triton 是"说清楚块大小,编译器帮你搬";TileLang 是"我来指定搬进 L1 还是 L0C,
-`>` Cube 何时算、何时同步"。两者都跑在 AI Core 上,差的是"谁决定搬运"。
+> **人话**:Triton 是"说清楚块大小,编译器帮你搬";TileLang 是"我来指定搬进 L1 还是 L0C,
+> Cube 何时算、何时同步"。两者都跑在 AI Core 上,差的是"谁决定搬运"。
 
 ***
 
@@ -144,8 +143,8 @@ flowchart LR
     TL -->|"−Python +裸 C++"| AC
 ```
 
-`>` **人话**:Python 是"只管对不对",Triton 是"说清块大小、编译器搬",TileLang 是"我指定
-`>` 搬进哪级缓存、Cube 怎么算",Ascend C 是"每一搬每算都我亲手写"。
+> **人话**:Python 是"只管对不对",Triton 是"说清块大小、编译器搬",TileLang 是"我指定
+> 搬进哪级缓存、Cube 怎么算",Ascend C 是"每一搬每算都我亲手写"。
 
 ***
 
@@ -163,9 +162,9 @@ flowchart TB
     CANN --> NPU["NPU AI Core 执行\nCube 16×16 MAC 阵列\nMTE2/MTE1/MTE3 队列"]
 ```
 
-`>` **人话**:`@tilelang.jit` 装饰的 Python 函数,先被 TileLang 前端翻译成带 tiling 语义的
-`>` TVM IR,再由 tilelang-ascend 后端 lower 成 AscendNPU IR,最后 CANN 链接成可执行码,
-`>` 跑在 AI Core 的 Cube/Vector 上。整条链路一次完成,首次调用触发、后续走缓存。
+> **人话**:`@tilelang.jit` 装饰的 Python 函数,先被 TileLang 前端翻译成带 tiling 语义的
+> TVM IR,再由 tilelang-ascend 后端 lower 成 AscendNPU IR,最后 CANN 链接成可执行码,
+> 跑在 AI Core 的 Cube/Vector 上。整条链路一次完成,首次调用触发、后续走缓存。
 
 ### 2. 安装与环境
 
@@ -177,7 +176,7 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 
 #### 安装 tilelang-ascend(预编译 wheel,推荐)
 
-tilelang-ascend 官方提供按 CANN 版本预编译的 wheel(以 `tilelang` 包名发布,内含 ascend 后端)。
+tilelang-ascend 官方提供按 CANN 版本预编译的 wheel(以 `tilelang` 包名发布,内含 ascend 后端)。版本号在源码注释里写作 `v0.1.1.010`、在 wheel 文件名里写作 `0.1.1.10+ubuntu.20.4.cann900`,是**同一发行版的两种写法**,本文统一称 `v0.1.1.010`。
 下载地址见 [releases](https://github.com/tile-ai/tilelang-ascend/releases),选匹配
 `cann版本 + 架构(aarch64/x86_64) + python 版本(cp311)` 的 wheel。
 
@@ -277,11 +276,10 @@ def main(
 
 - 张量用 `T.Tensor(shape, dtype)` 注解;`shape` 和 `dtype` 用闭包外层的编译期参数填值。
 
-- **坑**:`tilelang-ascend` 0.1.1.010 的 parser 要求注解是**实际 Buffer 对象**——
+- **坑**:`tilelang-ascend` v0.1.1.010 的 parser 要求注解是**实际 Buffer 对象**——
   本文件**不能**加 `from __future__ import annotations`(否则注解会变成 str,
   抛 `TVMError: expected Object but got str (type_code 11 vs 8)`,
-  见 [FAQ Q5](#5-注解解析问题为什么-from-__future__-import-annotations-会让-tilelang-崩) 和
-  [ops/05-gelu.md §8.6.4 #TL-5](/ops/05-gelu#863-tl-5))。
+  见下文 [§5.4 注解 workaround](#54-注解-workaroundtl-5) 和 ops/05-gelu §8.10.4 常见坑 #TL-5)。
 
 #### 3.3 `T.Kernel(..., is_npu=True)` 声明并行维度
 
@@ -299,13 +297,14 @@ with T.Kernel(m_num * n_num, is_npu=True) as (cid, _):
 - **`is_npu=True`** **是关键**:告诉 tilelang 这是 **NPU kernel**,走 ascend 后端,而不是
   GPU 的 CUDA thread block。**不加这个参数**,会按 GPU 语义生成代码,加载时报
   `target ascend_npu not found` 或 `Cannot find global function cce.product_init`
-  (见 [FAQ Q1](#1-is_nputrue-不加会怎样))。
+  (见 [FAQ Q1](#q1-is_nputrue-不加会怎样))。
 
 - 这里把 `m_num * n_num` 个输出块拍平成 1 维,由 `cid` 自行拆回 `(bx, by)`。单 block
   时 `grid=1`(单核);多 block 时多核并行。
 
-- 解包写法 **必须** `as (cid, _)`:ascend wheel 0.1.1.010 的 `T.Kernel` 返回二元序列,
-  解包成 `cid` 一个变量会抛错(见 `gelu_tilelang.py` 注释)。
+- 解包写法跟 `is_npu` 走:**带 `is_npu=True` 时** `T.Kernel` 返回二元序列,必须 `as (cid, _)`
+  (GEMM 源码如此);**不带 `is_npu` 时**单变量 `as cid` 即可(本仓库 gelu/softmax 源码如此,
+  此时 ascend 后端由全局 target 自动探测,见 [ops/05 §8.10](/ops/05-gelu))。
 
 #### 3.4 `T.alloc_L1` / `T.alloc_L0C` 显式分配片上缓冲
 
@@ -322,8 +321,8 @@ C_L0 = T.alloc_L0C((block_M, block_N), accum_dtype)
 | `T.alloc_ub`    | **UB**(Vector 工作台,逐元素算子)     | shared.dyn    | Vector 核的输入/输出 |
 | `T.alloc_local` | thread-private(本地缓冲)         | local         | 标量/中间值         |
 
-`>` **人话**:L1 是 Cube 核的"高速小仓",L0C 是 Cube 的"累加器寄存器"。在 TileLang 里
-`>` 你**显式声明**这些 buffer,编译器不会替你决定——这正是它控制力强的根源。
+> **人话**:L1 是 Cube 核的"高速小仓",L0C 是 Cube 的"累加器寄存器"。在 TileLang 里
+> 你**显式声明**这些 buffer,编译器不会替你决定——这正是它控制力强的根源。
 
 #### 3.5 `T.Scope("C")` Cube 执行域
 
@@ -337,7 +336,7 @@ with T.Scope("C"):
 - `T.Scope("C")` 把整段代码标记为 **Cube 核执行域**,所有 `T.gemm_v0` / `T.copy` 在
   这里的语义都按 Cube 核的搬运通路走(MTE2/MTE1 队列)。
 
-- 纯逐元素 kernel(如 GELU)用 `T.Scope("V")` 或 `T.Scope("M")`,走 Vector 核通路。
+- 逐元素 kernel 不一定要显式 `T.Scope`:本仓库的 GELU/Softmax 源码就没写(后端按算子形态自动走 Vector 通路);需要手动分核调度时才用,如 GEMM 的 `T.Scope("C")`。
 
 #### 3.6 `T.copy(GM→L1)` DMA 块搬运 + `T.barrier_all()` 同步
 
@@ -362,7 +361,7 @@ for k in T.serial(loop_k):
 - `T.barrier_all()`:**片内同步**。MTE2(Move Engine 2,GM→L1 搬运队列)和
   MTE1(L1→L0A/L0B 搬运队列)是异步的,这里保证"搬完再算"。
 
-  - 见 [FAQ Q5:barrier\_all 的作用](#5-tbarrier_all-的作用是什么)。
+  - 见 [FAQ Q5](#q5-tbarrier_all-的作用是什么)。
 
 #### 3.7 `T.gemm_v0(..., init=...)` Cube 矩阵乘
 
@@ -375,7 +374,7 @@ T.barrier_all()
 - `T.gemm_v0(A, B, C, init=...)`:**Cube 单元矩阵乘**。`A_L1 @ B_L1` 累加到 `C_L0`(L0C
   累加器,fp32)。
 
-- **`init`** **参数语义**(详见 [FAQ Q3](#3-tgemm_v0-的-init-参数语义是什么)):
+- **`init`** **参数语义**(详见 [FAQ Q3](#q3-tgemm_v0-的-init-参数语义是什么)):
 
   - `init=True` → **清零累加器再乘**(第一个 K 块用,避免残留脏数据)。
 
@@ -452,7 +451,7 @@ def gemm(a, b, block_M=128, block_N=128, K_L1=64):
 - 加载时找不到 `cce.product_init` 之类的 NPU 运行时符号,或者报
   `target ascend_npu not found`。
 
-- 详见 [FAQ Q1](#1-is_nputrue-不加会怎样)。
+- 详见 [FAQ Q1](#q1-is_nputrue-不加会怎样)。
 
 #### 4.3 缓冲分配:L1 / L0C / UB / local
 
@@ -469,7 +468,7 @@ TileLang 把 Ascend 的内存层级**显式暴露**:
 > **坑**:tilelang-ascend v0.1.1.010 的 `AscendCopy`(DMA)只允许 **global ↔ shared**
 > 或 **global ↔ shared.dyn**。把 `T.alloc_local`(scope=local)错用于 NPU Vector 核 UB,
 > 会抛 `TVMError: Unsupported scope: src = global, dst = local`
-> (见 [ops/05-gelu.md §8.6.4 #TL-2](/ops/05-gelu#863-tl-2))。
+> (见 ops/05-gelu §8.10.4 常见坑 #TL-2,GELU 上实测复现)。
 > **正确姿势**:Vector 核 UB 用 `T.alloc_ub`(scope=shared → UB),
 > Cube/L1 用 `T.alloc_L1`(scope=shared.dyn → L1)。
 
@@ -479,7 +478,7 @@ NPU 的 AI Core 分 Cube 核(矩阵乘)和 Vector 核(逐元素):
 
 - **`T.Scope("C")`**:Cube 核执行域,所有 `T.gemm_v0` 必须在 C scope 里。
 
-- **`T.Scope("V")`** **/** **`T.Scope("M")`**:Vector 核执行域,GELU 这类逐元素算子用。
+- **`T.Scope("V")`**:Vector 核执行域,逐元素算子走这里(本仓库 GELU/Softmax 未显式写,后端自动处理;需要显式分核时再用)。
 
 - Mixed scope(`T.Scope("M")`)允许 Cube + Vector 协同。
 
@@ -521,7 +520,7 @@ Ascend 的 MTE2(GM→L1 搬运队列)、MTE1(L1→L0A/L0B 搬运队列)、MTE3(L
 
 - 保证"下一轮 K 循环开始前,A\_L1/B\_L1 已被消费完"(避免覆写未读数据)。
 
-详见 [FAQ Q5](#5-tbarrier_all-的作用是什么)。
+详见 [FAQ Q5](#q5-tbarrier_all-的作用是什么)。
 
 #### 4.8 循环与分块:`T.serial` + `T.ceildiv`
 
@@ -552,9 +551,9 @@ Ascend 的 MTE2(GM→L1 搬运队列)、MTE1(L1→L0A/L0B 搬运队列)、MTE3(L
   控制粒度:        "我把这块算出来"                          "我把这块搬进 L1, 算进 L0C, 写回 GM"
 ```
 
-`>` **人话**:同样是"一个 GEMM block",Triton 让你只关心**块大小**,搬运和同步交给
-`>` 编译器;TileLang 让你**亲手写**每一步搬运、同步、Cube 调用。控制力上一档,
-`>` 心智负担也上一档。
+> **人话**:同样是"一个 GEMM block",Triton 让你只关心**块大小**,搬运和同步交给
+> 编译器;TileLang 让你**亲手写**每一步搬运、同步、Cube 调用。控制力上一档,
+> 心智负担也上一档。
 
 #### 4.10 ASCII 心法图:L1 / L0C / UB 内存层级
 
@@ -592,8 +591,8 @@ Ascend 的 MTE2(GM→L1 搬运队列)、MTE1(L1→L0A/L0B 搬运队列)、MTE3(L
         └──────────────────────────────────────────────────────────────────┘
 ```
 
-`>` **人话**:GM 是城外大仓,L1 是 Cube 核的小仓,L0C 是 Cube 核的累加器寄存器,UB 是
-`>` Vector 核的工作台。每两层之间都要靠 DMA(T.copy)显式搬运,靠 T.barrier\_all 同步。
+> **人话**:GM 是城外大仓,L1 是 Cube 核的小仓,L0C 是 Cube 核的累加器寄存器,UB 是
+> Vector 核的工作台。每两层之间都要靠 DMA(T.copy)显式搬运,靠 T.barrier\_all 同步。
 
 ### 5. GELU kernel:Vector 核 + UB + buffer 级原语
 
@@ -657,18 +656,20 @@ def gelu_activation(N: int, BLOCK: int, dtype: str = "float16"):
   广播标量);**`sub/div`** **只接受 Buffer**——常量 1 必须先
   `T.ascend_tile.fill(ONES, 1.0)` 填进 ONES buffer 再用向量 sub。
 
-#### 5.3 `T.Kernel` 解包:`as (cid, _)`
+#### 5.3 `T.Kernel` 解包:带不带 `is_npu` 决定写法
 
 ```python
-with T.Kernel(num_blocks) as cid:           # 旧版可能行
+# GEMM(多核 Cube 调度): is_npu=True → 返回二元序列, 必须元组解包
+with T.Kernel(m_num * n_num, is_npu=True) as (cid, _):
     ...
-# vs. tilelang-ascend 0.1.1.010 实际返回二元序列, 必须写:
-with T.Kernel(num_blocks, is_npu=True) as (cid, _):  # 推荐
+
+# GELU/Softmax(本仓库逐元素版): 不带 is_npu → 单变量即可
+with T.Kernel(num_blocks) as cid:
     ...
 ```
 
-> ascend wheel 0.1.1.010 的 `T.Kernel` 返回二元序列,即使你只用 `cid`,也要解包成
-> `(cid, _)`。详见 `gelu_tilelang.py` 顶部注释。
+> 规则:**`is_npu=True` 时** `T.Kernel` 返回二元序列,只写 `as cid` 会抛解包错误;
+> **不带 `is_npu` 时**单变量即可。两种写法在本仓库源码里都真实存在,以源码为准。
 
 #### 5.4 注解 workaround:`#TL-5`
 
@@ -683,8 +684,7 @@ ascend wheel 0.1.1.010 的 parser 要求注解是**实际 Buffer 对象**,不能
 ### 6. Softmax kernel:`T.serial` 手工 reduction
 
 源码:`examples/tilelang_ascend/src/softmax_tilelang.py`。Softmax 带沿最后一维的 reduction,
-TileLang 0.1.13 没有显式 `ReduceMax` / `ReduceSum` 原语,本教学版用 **`T.serial`** **循环手工**
-完成 4 个阶段:
+tilelang-ascend v0.1.1.010 没有暴露显式 `ReduceMax` / `ReduceSum` 原语,本教学版用 **`T.serial` 循环手工**完成 4 个阶段:
 
 ```
 y[i] = exp(x[i] - m) / Σ_j exp(x[j] - m),  其中 m = max_j x[j]
@@ -737,11 +737,16 @@ def main(X: "T.Tensor((D,), dtype)", Y: "T.Tensor((D,), dtype)"):
 
 #### 6.2 关键点
 
-- **`T.alloc_local`** 在 Softmax 里用了:存标量 `M_UB / S_UB / INV_UB`(各 1 个元素)。
-  这里没走 `T.copy(GM, local)`,所以不会触发 #TL-2 的 Unsupported scope 错误。
-  (但 X\_UB / Y\_UB 这种接 `T.copy(GM, UB)` 的,必须用 `T.alloc_ub`。)
+> ⚠️ **待迁移旧写法**:本节代码忠实镜像仓库现状——`softmax_tilelang.py` 仍用
+> `T.alloc_local` 接 `T.copy(GM→X_UB)`(上框 L711)。但同样的组合在 GELU 上对
+> v0.1.1.010 实测会抛 `Unsupported scope: src=global, dst=local`(坑 #TL-2,见
+> `gelu_tilelang.py` 注释)。**如果你跑 softmax 报这个错,先把 `T.alloc_local` 改成
+> `T.alloc_ub`**(对照上文 §5.1 GELU 写法)。
 
-- **`T.serial`** **做 reduction**:因为 TileLang 0.1.13 没有显式 ReduceMax/ReduceSum,本教学版
+- **`T.alloc_local`** 的定位:存标量 `M_UB / S_UB / INV_UB`(各 1 个元素)这类
+  thread-private 中间值;**接 `T.copy(GM, ...)` 的缓冲必须用 `T.alloc_ub`**(坑 #TL-2)。
+
+- **`T.serial`** **做 reduction**:因为 tilelang-ascend v0.1.1.010 没有暴露显式 ReduceMax/ReduceSum,本教学版
   用 `for k in T.serial(...)` + 标量累加器手工完成。性能不极致,但**语义最清晰**,
   适合理解 Ascend Vector 核的 reduction 怎么写。
 
@@ -758,7 +763,7 @@ def main(X: "T.Tensor((D,), dtype)", Y: "T.Tensor((D,), dtype)"):
    TBE/GE 算子编译器初始化,避免和 tilelang 自带 TVM 的 FFI 冲突。
 2. 生成 fp16 随机矩阵 A, B(torch tensor,放到 npu 设备)。
 3. **预热**:首次 `gemm(a, b)` 触发 tilelang-ascend 编译,这一步慢(TVM 编译 + CANN
-   链接,见 [FAQ Q4](#4-首次编译慢-正常吗))。
+   链接,见 [FAQ Q4](#q4-首次编译慢-正常吗))。
 4. 正式计时:`gemm(a, b, block_M=128, block_N=128, K_L1=64)`。
 5. numpy 算参考(fp16 输入升 fp32 累加)。
 6. `np.allclose(c_np, c_ref, atol=1e-2, rtol=1e-2)` 校验(fp16 容差)。
@@ -802,6 +807,14 @@ print(f"耗时: {elapsed*1000:.4f} ms, max_abs_error=..., {ok=}")
 [INFO] TileLang-Ascend GEMM 测试完成, 全部 PASS
 ```
 
+GELU / Softmax 的验证脚本同样在仓库里（TileLang 后端运行时曾受容器 HDC 链路问题影响，
+见 [ops/05 §8.10](/ops/05-gelu) 的验证步骤与排障）：
+
+```bash
+cd examples/tilelang_ascend
+uv run python src/test_gelu.py       # GELU 正确性 (max_err < 5e-3)
+uv run python src/test_softmax.py    # Softmax 正确性
+```
 ### 8. 性能特征
 
 #### 8.1 128³ GEMM 实测对比
@@ -813,8 +826,8 @@ print(f"耗时: {elapsed*1000:.4f} ms, max_abs_error=..., {ok=}")
 | **TileLang (tilelang-ascend)** | ✅       | **9.77e-04**    | **0.38 ms** | **PASS** |
 | Ascend C                       | ✅       | 0.0             | —           | PASS     |
 
-`>` **人话**:同是 128³ fp16 GEMM,TileLang 0.38 ms 是该规模四种 DSL 里最快的写法,
-`>` 比 Triton 0.79 ms 快一倍,比 Python 朴素三重循环快一万倍以上。
+> **人话**:同是 128³ fp16 GEMM,TileLang 0.38 ms 是该规模四种 DSL 里最快的写法,
+> 比 Triton 0.79 ms 快一倍,比 Python 朴素三重循环快一万倍以上。
 
 #### 8.2 显式调度效率:为什么 TileLang 在这个规模下最快
 
@@ -834,18 +847,16 @@ print(f"耗时: {elapsed*1000:.4f} ms, max_abs_error=..., {ok=}")
 
 #### 8.3 块参数选择:`block_M=128, block_N=128, K_L1=64`
 
-| 参数                                                                 | 取值     | 选择理由                                               |
-| ------------------------------------------------------------------ | ------ | -------------------------------------------------- |
-| `block_M`                                                          | 128    | Cube 单元按 16×16 MAC 阵列做矩阵乘,128 是 16 的倍数;同时让 A\_L1   |
-| (128 × 64 fp16 = 16 KB)和 C\_L0(128 × 128 fp32 = 64 KB)合理占用 L1/L0C。 | <br /> | <br />                                             |
-| `block_N`                                                          | 128    | 同上,让 B\_L1(64 × 128 fp16 = 16 KB)合理占用 L1。          |
-| `K_L1`                                                             | 64     | 一次搬 64 个 K 到 L1。K=128 时分 2 次搬,刚好展示 `init` 的"首块清零 + |
-| 后续累加"语义(教学版有意选 64 而非 128,让 K 维分块可见)。                               | <br /> | <br />                                             |
-| `dtype`                                                            | fp16   | Cube 原生精度,带宽最省。                                    |
-| `accum_dtype`                                                      | fp32   | K 维累加用 fp32,避免 fp16 累加溢出(混合精度标准做法)。                |
+| 参数 | 取值 | 选择理由 |
+| --- | --- | --- |
+| `block_M` | 128 | Cube 按 16×16 MAC 阵列做矩阵乘,128 是 16 的倍数;同时让 A_L1(128 × 64 fp16 = 16 KB)和 C_L0(128 × 128 fp32 = 64 KB)合理占用 L1/L0C。 |
+| `block_N` | 128 | 同上,让 B_L1(64 × 128 fp16 = 16 KB)合理占用 L1。 |
+| `K_L1` | 64 | 一次搬 64 个 K 到 L1。K=128 时分 2 次搬,刚好展示 `init` 的"首块清零 + 后续累加"语义(教学版有意选 64 而非 128,让 K 维分块可见)。 |
+| `dtype` | fp16 | Cube 原生精度,带宽最省。 |
+| `accum_dtype` | fp32 | K 维累加用 fp32,避免 fp16 累加溢出(混合精度标准做法)。 |
 
-`>` **人话**:128 / 128 / 64 不是玄学,是**让 L1 和 L0C 都装得下 + 让 K 维有可观察的分块**。
-`>` 真正生产环境会做 sweep 找最优,本教学版的取值兼顾了"够快 + 够好懂"。
+> **人话**:128 / 128 / 64 不是玄学,是**让 L1 和 L0C 都装得下 + 让 K 维有可观察的分块**。
+> 真正生产环境会做 sweep 找最优,本教学版的取值兼顾了"够快 + 够好懂"。
 
 ### 9. GEMM 调度流程图(Mermaid)
 
@@ -876,8 +887,7 @@ sequenceDiagram
     MTE3->>GM: 写回 fp16 输出块
 ```
 
-`>` **人话**:一个输出块的生命周期是 **搬 A/B 到 L1 → 同步 → Cube 算进 L0C → 同步 →
-`>`** **(循环 K) → 累加完 → L0C 写回 GM**。每一步都是显式的,你写哪步就有哪步。
+> **人话**:一个输出块的生命周期是 **搬 A/B 到 L1 → 同步 → Cube 算进 L0C → 同步 →(循环 K)→ 累加完 → L0C 写回 GM**。每一步都是显式的,你写哪步就有哪步。
 
 ### 10. 显式内存层级映射图(Mermaid)
 
@@ -914,8 +924,8 @@ flowchart TB
     UB -.->|T.copy UB→GM\nDMA| CG
 ```
 
-`>` **人话**:TileLang 把 GM(城外大仓)、L1(Cube 小仓)、L0C(Cube 累加器)、UB(Vector
-`>` 工作台)显式暴露,你写哪条 `T.copy`,DMA 就走哪条路。每一步都看得见。
+> **人话**:TileLang 把 GM(城外大仓)、L1(Cube 小仓)、L0C(Cube 累加器)、UB(Vector
+> 工作台)显式暴露,你写哪条 `T.copy`,DMA 就走哪条路。每一步都看得见。
 
 ***
 
@@ -927,13 +937,13 @@ flowchart TB
 | - | ----------------------------- | --------- | --------------------------------------------------------- |
 | 1 | Mermaid：编译通路                  | §1 工具链    | @tilelang.jit → TileLang IR → ascend 后端 → Ascend C → CANN |
 | 2 | Mermaid：抽象梯子                  | §2 Why    | Python → Triton → TileLang → Ascend C 控制力递增               |
-| 3 | Mermaid：GEMM 调度时序             | §5 双缓冲    | GM→L1→L0C→Cube→L0C→GM 的完整 sequenceDiagram                 |
-| 4 | Mermaid：显式内存层级映射              | §4 tiling | GM/HBM→L1→L0A/L0B→L0C→UB 的数据流 flowchart                   |
-| 5 | ASCII：TileLang vs Triton 调度对比 | §2 Why    | 显式 T.copy/T.barrier vs 隐式 tl.load/tl.store                |
-| 6 | ASCII：L1/L0C/UB 内存层级          | §4 tiling | 城外大仓→Cube 小仓→Cube 累加器→Vector 工作台                          |
+| 3 | Mermaid：GEMM 调度时序             | §9 调度流程 | GM→L1→L0C→Cube→L0C→GM 的完整 sequenceDiagram                 |
+| 4 | Mermaid：显式内存层级映射              | §10 层级映射 | GM/HBM→L1→L0A/L0B→L0C→UB 的数据流 flowchart                   |
+| 5 | ASCII：TileLang vs Triton 调度对比 | §4.9      | 显式 T.copy/T.barrier vs 隐式 tl.load/tl.store                |
+| 6 | ASCII：L1/L0C/UB 内存层级          | §4.10     | 城外大仓→Cube 小仓→Cube 累加器→Vector 工作台                          |
 
-`>` **人话**：4 张 Mermaid 画的是编译通路和调度时序，2 张 ASCII 画的是心智模型——
-`>` 一张对比 Triton 隐式 vs TileLang 显式，一张画硬件层级。
+> **人话**：4 张 Mermaid 画的是编译通路和调度时序，2 张 ASCII 画的是心智模型——
+> 一张对比 Triton 隐式 vs TileLang 显式，一张画硬件层级。
 
 ***
 
@@ -1016,6 +1026,8 @@ Ascend 的 MTE2(GM→L1 搬运队列)、MTE1(L1→L0A/L0B 搬运队列)、MTE3(L
 - **`T.alloc_local`** → scope=local → thread-private 本地缓冲。**不能**接
   `T.copy(GM, local)`,会抛 `Unsupported scope: src=global, dst=local`(坑 #TL-2)。
   仅在"标量 / 纯内部计算、不接 GM DMA"的场景用(如 Softmax 的 M\_UB/S\_UB/INV\_UB)。
+  注意:仓库里 `softmax_tilelang.py` 的 X\_UB/Y\_UB 仍是 `alloc_local` 接 GM 的旧写法,
+  报 Unsupported scope 时先改成 `alloc_ub`(见 §6.2 的待迁移警告)。
 
 ### Q8. `Cannot find global function cce.product_init` 怎么办?
 
@@ -1053,19 +1065,19 @@ launch,不走 torch\_npu 图编译,故可安全跳过。详见 `test_gemm.py` �
 
 ***
 
-## Reference
+## 参考资料
 
 **官方 / 项目来源:**
 
-- TileLang GitHub: <https://github.com/tile-ai/tilelang>
+- TileLang GitHub: [https://github.com/tile-ai/tilelang](https://github.com/tile-ai/tilelang)
 
-- tilelang-ascend GitHub: <https://github.com/tile-ai/tilelang-ascend>
+- tilelang-ascend GitHub: [https://github.com/tile-ai/tilelang-ascend](https://github.com/tile-ai/tilelang-ascend)
 
-- tilelang-ascend releases(预编译 wheel): <https://github.com/tile-ai/tilelang-ascend/releases>
+- tilelang-ascend releases(预编译 wheel): [https://github.com/tile-ai/tilelang-ascend/releases](https://github.com/tile-ai/tilelang-ascend/releases)
 
-- 华为昇腾 CANN 文档中心: <https://www.hiascend.cn/document>
+- 华为昇腾 CANN 文档中心: [https://www.hiascend.cn/document](https://www.hiascend.cn/document)
 
-- 华为昇腾 Ascend C 官方: <https://www.hiascend.com/cann/ascend-c>
+- 华为昇腾 Ascend C 官方: [https://www.hiascend.com/cann/ascend-c](https://www.hiascend.com/cann/ascend-c)
 
 **本仓库文件引用(可本地核验):**
 
@@ -1087,7 +1099,7 @@ launch,不走 torch\_npu 图编译,故可安全跳过。详见 `test_gemm.py` �
 
 - `docs/pages/hardware/02-storage-hierarchy.md` — 存储层级(GM/L1/L0A/L0B/L0C/UB/DMA)
 
-- `docs/pages/ops/05-gelu.md §8.6.4` — TileLang-Ascend 五大常见坑(#TL-1..#TL-5)
+- ops/05-gelu §8.10.4 — TileLang-Ascend 五大常见坑(#TL-1..#TL-5)
 
 - `docs/pages/ops/09-gemm.md` — GEMM 算子级原理(Cube 16×16 MAC、混合精度、tiling)
 

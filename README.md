@@ -74,10 +74,20 @@ cd examples/tilelang_ascend && uv run python src/test_gemm.py
 
 ## Docs
 
-```bash
-# 1. 安装依赖（首次运行，会创建 .venv）
-uv sync
+文档站基于 [Vocs](https://vocs.dev) 构建，源文件在 `docs/pages/`：
 
-# 2. 启动本地预览服务器
-uv run mkdocs serve
+```bash
+# 1. 安装依赖
+npm install
+
+# 2. 启动本地开发服务器（热刷新）
+npm run dev
+
+# 3. 构建静态站点（输出 dist/public/）
+npm run build
+
+# 4. 文档 MDX 语法检查（构建前防线）
+node scripts/check-mdx.mjs
 ```
+
+推送 `main` 分支后 GitHub Actions 自动构建并发布到 GitHub Pages（见 `.github/workflows/deploy-docs.yml`）。

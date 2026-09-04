@@ -1,7 +1,7 @@
 # 01 · Python/NumPy 正确性基准
 
-`>` 目标读者：所有想在昇腾 NPU 上写 kernel 的人。
-`>` 本文回答一个问题：**其他三种 DSL 的输出，凭什么说"对了"？**——答案就在这里。
+> 目标读者：所有想在昇腾 NPU 上写 kernel 的人。
+> 本文回答一个问题：**其他三种 DSL 的输出，凭什么说"对了"？**——答案就在这里。
 
 ---
 
@@ -9,9 +9,9 @@
 
 - Python/NumPy 基准是整个仓库的 **ground truth（正确性基准）**，跑在 CPU 上，不碰 NPU。
 - 它用最朴素的三重循环算 `C = A @ B`，fp16 输入 + fp32 累加，和 NPU kernel 同精度策略。
-- 所有 NPU kernel（Ascend C / Triton / TileLang）的输出都要和它做 `allclose(atol=1e-2, rtol=1e-2)`。
+- NPU kernel 的正确性都以 CPU 参考为锚比对（GEMM 三家 DSL 均为 `allclose(atol=1e-2, rtol=1e-2)`；个别算子如 TileLang GELU 用 `max_err < 5e-3`，以各自 test 脚本为准）。
 - 它还提供 GELU、Softmax 的参考实现，同样是其他 DSL 对齐的基准。
-- 工具链极简：`uv sync && uv run python src/gemm.py`，任意机器可跑。
+- 工具链极简：`cd examples/python && uv sync && uv run python src/gemm.py`，任意机器可跑。
 
 ---
 
@@ -41,7 +41,9 @@ NPU kernel 的开发有一个根本困难：**硬件上跑出来的结果，你�
 └──────────────────────────────────────────────────┘
 ```
 
-`>` **人话**：Python 基准是"标准答案"。NPU kernel 考完试，拿这个答案对一遍才知道及不及格。
+> **人话**：Python 基准是"标准答案"。NPU kernel 考完试，拿这个答案对一遍才知道及不及格。
+> 这套"先基准后下沉"的打法在 [四种 DSL 总览](/dsl/00-dsl-overview)里有全局图；
+> GELU / Softmax 的参考实现在 [GELU 篇](/ops/05-gelu)与 [Softmax 篇](/ops/03-softmax)有逐行讲解。
 
 ---
 
@@ -92,7 +94,7 @@ uv run python src/gelu.py
 uv run python src/softmax.py
 ```
 
-`>` **人话**：一条 `uv sync` 装好 numpy，一条 `uv run` 跑起来，不挑机器。
+> **人话**：一条 `uv sync` 装好 numpy，一条 `uv run` 跑起来，不挑机器。
 
 ### 2. GEMM 基准实现
 
@@ -118,7 +120,7 @@ def gemm_native(A: np.ndarray, B: np.ndarray) -> np.ndarray:
 "fp16 输入 + fp32 累加器"的标准做法（混合精度），否则 fp16 逐次乘法会在 K 较大时
 累积出显著误差。
 
-`>` **人话**：输入存窄的（fp16 省空间），账本花宽的（fp32 保精度）——这就是混合精度。
+> **人话**：输入存窄的（fp16 省空间），账本花宽的（fp32 保精度）——这就是混合精度。
 
 #### 2.2 参考基准（NumPy BLAS）
 
@@ -165,7 +167,7 @@ def gelu_numpy(x: np.ndarray) -> np.ndarray:
 gelu_reference = gelu_numpy  # 对外 ground truth
 ```
 
-`>` **人话**：GELU 是逐元素算子，不走 Cube，走 Vector。Python 基准只管公式对不对。
+> **人话**：GELU 是逐元素算子，不走 Cube，走 Vector。Python 基准只管公式对不对。
 
 ### 4. Softmax 基准实现
 
@@ -192,7 +194,7 @@ def softmax_reference(x, axis=-1):
 关键点：**先减 max 再 exp**（数值稳定），内部归约用 fp32。NPU 上的 Softmax kernel
 也遵循同样的三阶段（max → exp → sum/div），只是跑在 Vector 单元 + UB 上。
 
-`>` **人话**：不减 max 直接 exp，fp16 下 x>80 就爆 inf。减了 max 才安全——这是所有 DSL 的共识。
+> **人话**：不减 max 直接 exp，fp16 下 x>80 就爆 inf。减了 max 才安全——这是所有 DSL 的共识。
 
 ### 5. 文件总览
 
@@ -226,7 +228,7 @@ flowchart TB
     ANS -->|"allclose(atol=1e-2, rtol=1e-2)"| TL
 ```
 
-`>` **人话**：Python 基准先在 CPU 上自验（朴素版 vs BLAS），确认正确后再去校验 NPU kernel。
+> **人话**：Python 基准先在 CPU 上自验（朴素版 vs BLAS），确认正确后再去校验 NPU kernel。
 
 ---
 
@@ -248,7 +250,7 @@ flowchart TB
              • 流水线（搬运与计算重叠）
 ```
 
-`>` **人话**：同是"一个矩阵乘"，会分块、会喂 Cube 的写法，比傻算快上万倍。
+> **人话**：同是"一个矩阵乘"，会分块、会喂 Cube 的写法，比傻算快上万倍。
 
 ---
 
@@ -257,8 +259,8 @@ flowchart TB
 **Q1：为什么不用 PyTorch 的 `torch.matmul` 作为基准？**
 
 NumPy 的 `@` 跑在 CPU 上，不受 NPU 驱动/CANN 版本影响，是最稳定的参照物。PyTorch 的
-`torch.matmul` 在 NPU 上走的是 CUBLAS（华为的 BLAS 库），它本身就是"被校验的对象"之一，
-不适合做基准。
+`torch.matmul` 在 NPU 上走的是 CANN/ATB 提供的 matmul 实现（CUBLAS 是 NVIDIA 的库名，
+与昇腾无关），它本身就是"被校验的对象"之一，不适合做基准。
 
 **Q2：atol=1e-2 是不是太松了？**
 

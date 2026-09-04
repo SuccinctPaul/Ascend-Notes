@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vocs dev",
-    "build": "vocs build",
+    "check-mdx": "node scripts/check-mdx.mjs",
+    "build": "node scripts/check-mdx.mjs && vocs build",
     "preview": "vocs build && vocs preview"
   },
   "dependencies": {
