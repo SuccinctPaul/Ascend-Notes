@@ -199,7 +199,7 @@ Softmax 很少单独出现，常与相邻算子**融合**以省一次 GM 往返�
 
 - 再累加块2：`l += e^{6−6}=e^{0}=1` → `l≈1.3862`。
 
-- 这个"旧和乘 e^{旧m−新m}"的动作，就是在线 Softmax 的 **rescale**。
+- 这个"旧和乘 e^\{旧m−新m\}"的动作，就是在线 Softmax 的 **rescale**。
 
 ```mermaid
 flowchart TD
@@ -261,7 +261,7 @@ flowchart LR
 
 1. **NumPy CPU fp32 参考基线** (`examples/python/src/softmax.py`: `softmax_reference`, 数值稳定版，先减 max → exp → sum → div, fp32 内部归约).
 2. **Triton-Ascend NPU fp16 生产版** (`examples/triton_ascend/src/softmax_triton.py`: `@triton.jit softmax_kernel` — 每个 program 负责一整行；`D > BLOCK_SIZE` 时先 pad `-inf` 到 1024 整数倍，再三阶段 Pass1(max) / Pass2(exp+sum) / Pass3(normalize) 迭代).
-3. **Ascend C 生产版 fp16** (`examples/ascend_c/op_kernel/softmax_kernel.cpp` — 3-pass 标量实现: row\_max / exp+sum 写回 / normalize；常数 `-1e20 / 0 / 1` 从 GlobalTensor<float> DataCopy 到 LocalTensor 取 GetValue，规避 CANN 9.0 SetValue(-inf) bug；Host 下发 `numBlocks=1` 保证云容器共享调度下 100% 覆盖所有行列).
+3. **Ascend C 生产版 fp16** (`examples/ascend_c/op_kernel/softmax_kernel.cpp` — 3-pass 标量实现: row\_max / exp+sum 写回 / normalize；常数 `-1e20 / 0 / 1` 从 `GlobalTensor\<float\>` DataCopy 到 LocalTensor 取 GetValue，规避 CANN 9.0 SetValue(-inf) bug；Host 下发 `numBlocks=1` 保证云容器共享调度下 100% 覆盖所有行列).
 4. **Ascend C 标量地板版 fp16** (`examples/ascend_c/op_kernel/softmax_scalar_kernel.cpp` — 与生产版算法相同，额外在每个元素的比较 / 累加 / 缩放处注入一次 `LocalTensor SetValue + GetValue` round-trip 语义恒等式延迟，作为"纯标量无流水线"的性能地板参考).
 
 > **备注 (TileLang-Ascend)**: 代码实现已完成 (`examples/tilelang_ascend/src/softmax_tilelang.py`, 入口 `softmax_tilelang(x, BLOCK=256)`)，且本地 Python API smoke 测试通过（构造 kernel 对象 OK）。但在 CANN 9.0 aarch64 云容器环境中运行时，TileLang 的 `target detector` 因缺少 ascend backend registration plugin 抛错（与 GELU §8 TileLang 分支遇到的是同一个问题）。在云容器安装 `tilelang-ascend-0.1.1.010` CANN 9.0 aarch64 wheel 并执行 `pip install cython` 后，即可复现 TIR→Ascend IR→.so 的完整链路，届时把 `--run=tilelang` 加入 bench 命令即可自动追加列。当前 §8.4 性能表暂按 3 家 NPU fp16（Triton / Ascend C 生产 / Ascend C 标量）+ NumPy 列出。
@@ -419,9 +419,9 @@ Ground truth 统一用 `examples/python/src/softmax.py:softmax_reference`（fp32
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----: | ------: | -------------------: | --------: | -------------------------------------------------------------------------------------------------------------------: |
 | NumPy fp32（参考基线）     | (128,)/(16×64)/(2×4×32×128)/(1024,)/(32×64)/(2×8×16×128) + vs PyTorch F.softmax 交叉                                                              | **9** | **9/9** | ≤ 1.1e-07 (vs torch) | ≤ 2.3e-06 |                                                                                               host 侧 ground truth 基准 |
 | Triton-Ascend fp16   | vec-128 / vec-odd-12345 / mat-32×128 / mat-16×2048(D>BLOCK) / mat-64×512-fp32 / tensor-4d / tensor-4d-odd-D / big-row-128×4096 / batch-1024×768 | **9** | **9/9** |       ≤ **6.10e-05** | ≤ 4.1e-04 |                                                                              pad -inf + 三阶段；D≤BLOCK 与 D>BLOCK 两路全部通过 |
-| Ascend C 生产版 fp16    | rows×D ∈ {16×64, 16×128, 16×512, 16×8192}                                                                                                       | **4** | **4/4** |       ≤ **1.22e-04** | ≤ 8.6e-04 |                                                                                                      单 block + 逐元素标量 |
-| Ascend C 标量地板版 fp16  | rows×D ∈ {16×64, 16×128, 16×512, 16×8192}                                                                                                       | **4** | **4/4** |       ≤ **1.22e-04** | ≤ 8.6e-04 |                                                                                                   延迟注入版本，数值与生产版逐元素一致 |
-| TileLang-Ascend fp16 | D ∈ {256, 1024, 4096}, BLOCK=256                                                                                                                | **3** | **0/3** |                  N/A |       N/A | 云容器缺少 `tilelang-ascend` backend registration plugin，Target 无法 detect `ascend/A2`；本地 Python API 构造 kernel 对象已通过 smoke |
+| Ascend C 生产版 fp16    | rows×D ∈ \{16×64, 16×128, 16×512, 16×8192\}                                                                                                       | **4** | **4/4** |       ≤ **1.22e-04** | ≤ 8.6e-04 |                                                                                                      单 block + 逐元素标量 |
+| Ascend C 标量地板版 fp16  | rows×D ∈ \{16×64, 16×128, 16×512, 16×8192\}                                                                                                       | **4** | **4/4** |       ≤ **1.22e-04** | ≤ 8.6e-04 |                                                                                                   延迟注入版本，数值与生产版逐元素一致 |
+| TileLang-Ascend fp16 | D ∈ \{256, 1024, 4096\}, BLOCK=256                                                                                                                | **3** | **0/3** |                  N/A |       N/A | 云容器缺少 `tilelang-ascend` backend registration plugin，Target 无法 detect `ascend/A2`；本地 Python API 构造 kernel 对象已通过 smoke |
 
 > 数值结论：三家成功运行的 NPU fp16 实现 **max|Δ| 都落在 1 ulp fp16 (≈ 9.77e-04) 以内**，属于"等价于工业实现 fp16 精度"的水平。Ascend C 两分支误差相同（算法同构），Triton 因归约路径在 fp32 中间累加完成得稍好（1 ulp 量级内）。
 
@@ -464,7 +464,7 @@ Softmax（3-pass，沿 axis=-1 对 D 维归约）对每个元素的操作计数�
 
 > 说明 (2026-09-03)：本节数据为 **smoke 实估值 + 线性插值占位**。完整 `bench_softmax.py --repeats=15` 跑完后（参见 §8.6 命令），需要用 JSON 中每个 cell 的实测值一次性替换掉标注 `⚠ 占位` 的单元格。HBM\_util\_pct / Vector\_peak\_util\_pct / efficiency\_wrt\_roofline 三个派生指标按占位带宽值同步计算。
 
-**统一 sweep 设定**：M = 128 行（相当于 batch=128 的 attention head softmax），扫 D ∈ {512, 2048, 8192, 32768, 131072, 524288, 8388608}，总元素数 N = M×D ∈ {64K, 256K, 1M, 4M, 16M, 64M, 1024M}。每档 N 取 15 次最佳耗时。
+**统一 sweep 设定**：M = 128 行（相当于 batch=128 的 attention head softmax），扫 D ∈ \{512, 2048, 8192, 32768, 131072, 524288, 8388608\}，总元素数 N = M×D ∈ \{64K, 256K, 1M, 4M, 16M, 64M, 1024M\}。每档 N 取 15 次最佳耗时。
 
 | 实现                             | M × D (总元素 N)  | dtype   | 最佳耗时 ms         | 带宽 GB/s | 吞吐 GFLOPS | 最大误差 max\|Δ\| | HBM 利用率 % | 峰值算力利用率 % | Roofline 效率 % (实测 / 1600 GFLOPS) |
 | ------------------------------ | -------------- | ------- | --------------- | ------- | --------- | ------------- | --------- | --------- | -------------------------------- |
@@ -547,7 +547,7 @@ graph LR
 
 2. **Triton-Ascend 目前占据明显性能领先**（在最大档 N=1024M 时约 56.3 GB/s ⚠，对比同机 GELU Triton 的 213 GB/s 约为其 26%）。Softmax 的 3-pass 特性意味着同一行要读 2\~3 次，天然会比纯 element-wise 的 GELU 少 1/(pass 次数) ≈ 66% 的带宽，因此 26% 的数字是合理的 — 剩下的差距主要来自 `D > BLOCK_SIZE` 时 pad 开销与 pass 间写回 GM 暂存。把 BLOCK\_SIZE 从 1024 升到 4096（910B2 的 UB 足够容纳），预计能再 +30%\~50%。
 
-3. **Ascend C 两档都接近原点 (HBM util < 万分之一)**。根因和 GELU §8.4 Ascend C 一模一样：
+3. **Ascend C 两档都接近原点 (HBM util \< 万分之一)**。根因和 GELU §8.4 Ascend C 一模一样：
 
    - Host 侧退化为 `numBlocks=1`（规避 CANN 9 云容器 `numBlocks>1` 时 bid 随机调度遗漏的漏洞）；
 
@@ -611,17 +611,17 @@ bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
 ## 九、参考资料
 
 - **Online Softmax 论文**（Maxim Milakov, Natalia Gimelshein, NVIDIA, "Online normalizer calculation for softmax", 2018）：
-  <https://arxiv.org/abs/1805.02867>
+  https://arxiv.org/abs/1805.02867
 
 - **Softmax（Wikipedia，Softmax 函数总览）**：
-  <https://en.wikipedia.org/wiki/Softmax_function>
+  https://en.wikipedia.org/wiki/Softmax_function
 
 - 华为昇腾开发者社区官方博客《昇腾 CANN Softmax 算子开发实战：数值稳定、高性能 Ascend C 实现》（用 `ReduceMax`/`vExp`/`ReduceSum` 等 Vector 指令 + 分块归约实现）：
-  <https://www.hiascend.com/developer/blog/details/02168212746702197012>
+  https://www.hiascend.com/developer/blog/details/02168212746702197012
 
 - 华为昇腾 CANN 官方文档（CANN 商用版 8.0）Ascend C API（Vector 指令库，含 `ReduceMax`/`ReduceSum`/`vExp` 等）：
-  <https://www.hiascend.cn/document>
+  https://www.hiascend.cn/document
   （在文档中心检索"AscendC API · 向量指令"即可定位；文档地址带版本号，可能随版本迁移。）
 
-> 说明：昇腾文档地址带版本号，失效时请在 <https://www.hiascend.cn/document> 检索传向量指令（Vector API）。
+> 说明：昇腾文档地址带版本号，失效时请在 https://www.hiascend.cn/document 检索传向量指令（Vector API）。
 

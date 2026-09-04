@@ -63,7 +63,7 @@ export default defineConfig({
       link: '/reference/context',
     },
     {
-      text: 'NPU 体系化架构',
+      text: '第 01 卷 · NPU 体系化架构',
       collapsed: false,
       items: [
         { text: '01 · AI Core 硬件模型全貌', link: '/hardware/01-ai-core-overview' },
@@ -73,7 +73,18 @@ export default defineConfig({
       ],
     },
     {
-      text: 'LLM 优化算子',
+      text: '第 03 卷 · 四种 DSL 核心手册',
+      collapsed: false,
+      items: [
+        { text: '00 · 四种 DSL 总览', link: '/dsl/00-dsl-overview' },
+        { text: '01 · Python/NumPy 正确性基准', link: '/dsl/01-python-baseline' },
+        { text: '02 · Triton on Ascend', link: '/dsl/02-triton-ascend' },
+        { text: '03 · TileLang on Ascend', link: '/dsl/03-tilelang-ascend' },
+        { text: '04 · Ascend C 核心手册', link: '/dsl/04-ascend-c' },
+      ],
+    },
+    {
+      text: '第 04 卷 · LLM 优化算子',
       collapsed: false,
       items: [
         { text: '01 · element-wise 与算子融合', link: '/ops/01-elementwise-and-fusion' },
@@ -88,7 +99,7 @@ export default defineConfig({
       ],
     },
     {
-      text: '性能优化与 Profiling',
+      text: '第 02/05 卷 · 性能模型与 Profiling',
       collapsed: false,
       items: [
         { text: '00 · 如何计算 NPU 算力', link: '/perf/00-npu-peak-flops-calculation' },

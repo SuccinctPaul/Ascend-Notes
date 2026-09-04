@@ -3,7 +3,7 @@
 `>` 目标读者：理解 element-wise 与 GEMM，想搞清楚"激活函数在 NPU 上怎么算、怎么优化"。
 `>` 本文聚焦 GELU（含 tanh 近似版），并顺带比较 ReLU、SiLU/Swish 等同类激活。
 
----
+***
 
 ## 一、概述
 
@@ -14,7 +14,7 @@ TL;DR：激活函数就是给神经元的输出"过一道门槛/加一道拐弯"
        GELU 是其中带"sigmoid 式软门槛"的一种，可用 tanh 近似快速算。
 ```
 
----
+***
 
 ## 二、定义
 
@@ -61,16 +61,16 @@ flowchart LR
 
 ### 2.4 同类激活快速对照
 
-| 激活 | 公式 | 特点 |
-|---|---|---|
-| ReLU | `max(x, 0)` | 最便宜，硬门槛，负值全 0 |
-| GELU | `x·Φ(x)` ≈ tanh 近似 | 平滑软门槛，Transformer 前馈常用 |
-| SiLU / Swish | `x·sigmoid(x)` | 与 GELU 相似，也是软门槛 |
-| Tanh | `(e^x−e^{−x})/(e^x+e^{−x})` | 输出限制在 (−1,1)，饱和 |
+| 激活           | 公式                          | 特点                     |
+| ------------ | --------------------------- | ---------------------- |
+| ReLU         | `max(x, 0)`                 | 最便宜，硬门槛，负值全 0          |
+| GELU         | `x·Φ(x)` ≈ tanh 近似          | 平滑软门槛，Transformer 前馈常用 |
+| SiLU / Swish | `x·sigmoid(x)`              | 与 GELU 相似，也是软门槛        |
+| Tanh         | `(e^x−e^{−x})/(e^x+e^{−x})` | 输出限制在 (−1,1)，饱和        |
 
-LLaMA 用 SwiGLU（SiLU 的一种门控变体），BERT/很多 Transformer 用 GELU——核心都是"给 x 乘一个 0~1 之间的软增益，实现非线性稠化"。
+LLaMA 用 SwiGLU（SiLU 的一种门控变体），BERT/很多 Transformer 用 GELU——核心都是"给 x 乘一个 0\~1 之间的软增益，实现非线性稠化"。
 
----
+***
 
 ## 三、为什么需要它
 
@@ -86,7 +86,7 @@ ReLU 在 0 处不可导、负区梯度恒 0（可能"神经元死亡"）。GELU/
 
 每个 Transformer 层的前馈网络很高、很大（常常 hidden 的 4 倍甚至高级倍），激活就跟着用了海量次数。所以"激活本身便宜"也要讲究"别让激活这一趟搬运拖累 GEMM"。
 
----
+***
 
 ## 四、朴素实现
 
@@ -106,7 +106,7 @@ def gelu_exact(x):
 
 朴素写法的全部开销：`x³ → 乘常数 → tanh(t) → 与 x 相乘`。它就是一个**逐元素**的乘法链，没有任何跨元素归约。
 
----
+***
 
 ## 五、NPU 上的关键优化点
 
@@ -132,7 +132,8 @@ flowchart LR
 `erf`、`tanh`、甚至 `sigmoid` 在大模型里是高频数学函数。昇腾 Vector 单元对常见的 `tanh` 有硬件加速指令（或提供质量的级数近似），比用标量循环逐点强太多。要点：
 
 - **能用指令用指令**，`tanh` 尽量交给 Vector 硬指令；
-- 若确需精确 `erf`，用**查表（LUT）**或**分段多项式**在精度允许范围内近似，避免每次现算昂贵级数。
+
+- 若确需精确 `erf`，用**查表（LUT）或**分段多项式在精度允许范围内近似，避免每次现算昂贵级数。
 
 `>` 人话：把这些"贵函数"写成查表或硬件指令，是激活类算子性能的关键——别手写逐点级数。
 
@@ -141,8 +142,11 @@ flowchart LR
 GELU 几乎总跟在第一个 FFN 的 GEMM 之后（`y = GELU(W·x)`）。最优做法是把 GELU 作为那个 GEMM 的 **epilogue**：
 
 - Cube 把 `W·x` 累加到 **L0C**；
+
 - DMA 把 L0C 跨域搬到 **UB**；
+
 - Vector 在 UB 上直接做 GELU；
+
 - 一次写回 GM。
 
 这样 GEMM 的整块结果根本没落地到 GM 就完成了激活，省掉一格往返——这是 CONTEXT.md"L0C→UB 跨域搬运→Vector 加工"通路的标准用法。
@@ -152,6 +156,7 @@ GELU 几乎总跟在第一个 FFN 的 GEMM 之后（`y = GELU(W·x)`）。最优
 fp16 下算 `x³` 当 `x` 较大时会放大误差；常用对策：
 
 - 在 **fp32 累加/计算**里做中间乘法（尤其 `0.5·(1+tanh(t))` 的合成），再降到 fp16 存；
+
 - 因为融合进 GEMM 是在 fp32 累加结果之后直接做，激活本身精度就借力 fp32 累加器。
 
 这正好复用仓库 CONTEXT.md 的**混合精度**（fp16 输入输出 + fp32 累加）原则。
@@ -166,13 +171,13 @@ fp16 下算 `x³` 当 `x` 较大时会放大误差；常用对策：
 
 `>` 人话：Cube 和 Vector 是两条不同的流水线，用心把它们错开交替干活，整层才算得快——激活不是孤军奋战，而是和 GEMM 抢零碎时间。
 
----
+***
 
 ## 常见误区与追问
 
 1. **"tanh 近似版会差很多吗？"** 不会。GELU 论文报告它与精确 `erf` 版本的最大误差极小（典型做法下肉眼难辨），工业级实现（包括主流 HF 模型默认）几乎都用 tanh 近似。这正是"用一点可控近似换大幅便宜"的经典案例。
 2. **"激活为什么必须紧跟 GEMM 融合？"** 因为不融合就得先把大而密的 `W·x` 写回 GM、再读回来做激活；融合后数据留在片上（L0C→UB）就地加工，省掉这趟读写。激活本身是 element-wise，融合零风险。
-3. **"GELU 和 SiLU 能互相换吗？"** 实现上都是"给 x 乘一个 0~1 软门"；模型架构里选定后通常不换，因为数值分布已就位。理解上可视为同一族。
+3. **"GELU 和 SiLU 能互相换吗？"** 实现上都是"给 x 乘一个 0\~1 软门"；模型架构里选定后通常不换，因为数值分布已就位。理解上可视为同一族。
 4. **"激活需要 fp16 输入吗？"** 只要与 GEMM 的输入输出对齐即可；融合进 GEMM 时往往在 fp32 累加结果后直接做，因而**激活本身天然在宽精度里进行**，再截回输出精度。单独跑时用 fp16 输入、中间门控用 fp32 合成即可。
 5. **"GELU 在硬件上要不要专门算子？"** 不用专门的"GELU 算子"——它就是一串 Vector 指令（乘方 + tanh + 乘）。正因为纯 element-wise，才能毫不费力地融进 GEMM 的 epilogue 里。
 6. **"激活对位宽敏感吗？"** 主要看它后面接什么。融合进 GEMM 时它消费的是 L0C 里 fp32 的累加结果，因而门控合成天然在宽精度里；单独跑时用 fp16 输入、中间用 fp32 合成即可，对精度影响可忽略。
@@ -181,7 +186,9 @@ fp16 下算 `x³` 当 `x` 较大时会放大误差；常用对策：
 ### 一个具体的数值对照（理解 tanh 近似）
 
 取 `x=1.0`：
+
 - 精确：`GELU(1) = 1·Φ(1) ≈ 0.8413`；
+
 - tanh 近似：`t = 0.79788·(1 + 0.044715·1) ≈ 0.8335`，`0.5·1·(1+tanh(0.8335)) ≈ 0.5·(1+0.6824)≈0.8412`。
 
 二者几乎相同，而近似只用了"乘方 + 常数 + tanh"，没有昂贵的 `erf`——这就是它在硬件（尤其 NPU 没有原生 erf 指令）上被选中的原因。
@@ -194,7 +201,7 @@ flowchart LR
     Y["精确 Φ(1)≈0.8413"]
 ```
 
----
+***
 
 ## 六、数据流总览
 
@@ -207,21 +214,29 @@ flowchart LR
     L0C -->|"DMA 跨域"| UB
 ```
 
----
+***
 
 ## 七、TL;DR
 
 - GELU = `x·Φ(x)`，软门槛、平滑、可导，Transformer 前馈层标配；
+
 - **tanh 近似版**用"一次立方 + 常数 + tanh"取代昂贵的 `erf`，工业界几乎都用它；
+
 - 归属 element-wise → **Vector + UB** 一路算完，数据一趟进出；
+
 - **与 GEMM epilogue 融合**：Cube 结果跨域搬到 UB 就地激活，不落 GM；
+
 - 尾块用对齐+补 0+mask 处理；中间用 fp32 稳住精度。
-- 一句话记住它：**激活就是"软门槛 + 逐元素 + 宜融合"**——看懂这个，SiLU/SwiGLU 也一通百通，因为它们同属"给 x 乘一个 0~1 软门"。
+
+- 一句话记住它：**激活就是"软门槛 + 逐元素 + 宜融合"**——看懂这个，SiLU/SwiGLU 也一通百通，因为它们同属"给 x 乘一个 0\~1 软门"。
+
 - 补充一句：若连 tanh 都想省，可走**查表/LUT**直接查 Φ(x)，在精度宽松的场合更快；但主流仍选 tanh 版，因为它"一次立方 + 常数 + tanh"在 Vector 上一气呵成、够准也够快。
+
 - 最后的提醒：激活优化永远是"少搬 + 融合"，别在单个函数快慢上钻牛角尖——把数据往返 GM 的那趟省掉，收益远大于把 tanh 再快一点。
+
 - 至此，激活这条"小算子"的路你也走通了：它虽小，却是每次理解 element-wise 与融合的最佳陪练。
 
----
+***
 
 ## 复习自测（带答案要点）
 
@@ -234,9 +249,9 @@ flowchart LR
 
 ### 和 SwiGLU（SiLU）的一点关系
 
-LLaMA-2/3 的 FFN 用的是 **SwiGLU**：本质上是对 `SiLU(xW_a)` 与 `xW_b` 做**逐元素相乘**的"门控激活"。它和 GELU 同属于"软门控"一族，只是门不是 `Φ(x)` 而是 `sigmoid(x)`，且额外乘一个投影。理解 GELU 的关键——**"给 x 乘一个 0~1 软门、逐元素、适合 Vector/融合"**——完全顺用到 SiLU/SwiGLU 上。
+LLaMA-2/3 的 FFN 用的是 **SwiGLU**：本质上是对 `SiLU(xW_a)` 与 `xW_b` 做**逐元素相乘**的"门控激活"。它和 GELU 同属于"软门控"一族，只是门不是 `Φ(x)` 而是 `sigmoid(x)`，且额外乘一个投影。理解 GELU 的关键——**"给 x 乘一个 0\~1 软门、逐元素、适合 Vector/融合"**——完全顺用到 SiLU/SwiGLU 上。
 
----
+***
 
 ## 八、四种 DSL 对照实现 (TBE 等价 / Ascend C / Triton / TileLang)
 
@@ -248,18 +263,18 @@ LLaMA-2/3 的 FFN 用的是 **SwiGLU**：本质上是对 `SiLU(xW_a)` 与 `xW_b`
 
 ### 8.1 对照总览
 
-| 维度 \ DSL       | Python (TBE 等价)                | Triton-Ascend                       | TileLang-Ascend                      | Ascend C (TIK 后继)                     |
-|---|---|---|---|---|
-| 语言             | NumPy / Python                   | `@triton.jit` + `tl.`               | `@tilelang.jit` + `T.`                | C++ (`GlobalTensor` / `LocalTensor`)     |
-| 目标             | 正确性 ground truth              | 半自动 tiling + 自动 Cube/Vector 映射 | 显式 tiling / 搬运 / Scope / 调度      | 全手动，最贴近硬件                        |
-| 在 NPU 上跑？   | 否（CPU 上 reference）           | 是（需 triton-ascend 后端）          | 是（需 tilelang-ascend 后端 + CANN）   | 是（bisheng 编译 + ACL runtime）        |
-| 对应硬件抽象层   | 纯数学公式 (TBE 早期 DSL = 张量表达式 + schedule) | Grid = AI Core 多个 program；BLOCK = UB tile | UB / L1 / L0C 显式分配；Scope("M")=Vector | GlobalTensor=GM；LocalTensor=UB；Vector 指令一条一条写 |
-| GELU 实现文件    | `examples/python/src/gelu.py`  | `examples/triton_ascend/src/gelu_triton.py` | `examples/tilelang_ascend/src/gelu_tilelang.py` | `examples/ascend_c/op_kernel/gelu_kernel.cpp` |
-| 测试文件         | `examples/python/src/test_gelu.py` | `examples/triton_ascend/src/test_gelu.py` | `examples/tilelang_ascend/src/test_gelu.py` | `examples/ascend_c/src/gelu_host.cpp` (host 自验) |
+| 维度 \ DSL  | Python (TBE 等价)                       | Triton-Ascend                               | TileLang-Ascend                                 | Ascend C (TIK 后继)                               |
+| --------- | ------------------------------------- | ------------------------------------------- | ----------------------------------------------- | ----------------------------------------------- |
+| 语言        | NumPy / Python                        | `@triton.jit` + `tl.`                       | `@tilelang.jit` + `T.`                          | C++ (`GlobalTensor` / `LocalTensor`)            |
+| 目标        | 正确性 ground truth                      | 半自动 tiling + 自动 Cube/Vector 映射              | 显式 tiling / 搬运 / Scope / 调度                     | 全手动，最贴近硬件                                       |
+| 在 NPU 上跑？ | 否（CPU 上 reference）                    | 是（需 triton-ascend 后端）                       | 是（需 tilelang-ascend 后端 + CANN）                  | 是（bisheng 编译 + ACL runtime）                     |
+| 对应硬件抽象层   | 纯数学公式 (TBE 早期 DSL = 张量表达式 + schedule) | Grid = AI Core 多个 program；BLOCK = UB tile   | UB / L1 / L0C 显式分配；Scope("M")=Vector            | GlobalTensor=GM；LocalTensor=UB；Vector 指令一条一条写   |
+| GELU 实现文件 | `examples/python/src/gelu.py`         | `examples/triton_ascend/src/gelu_triton.py` | `examples/tilelang_ascend/src/gelu_tilelang.py` | `examples/ascend_c/op_kernel/gelu_kernel.cpp`   |
+| 测试文件      | `examples/python/src/test_gelu.py`    | `examples/triton_ascend/src/test_gelu.py`   | `examples/tilelang_ascend/src/test_gelu.py`     | `examples/ascend_c/src/gelu_host.cpp` (host 自验) |
 
 下面逐个来看核心代码，尽量都只展示"公式那一段"。
 
----
+***
 
 ### 8.2 Python (TBE 等价) —— 正确性的"锚"
 
@@ -283,10 +298,12 @@ gelu_reference = gelu_numpy
 **它在做什么？**
 
 - 纯 NumPy 广播，没有任何跨元素 reduction；
+
 - 输出 dtype 与输入严格一致（fp16/fp32/fp64 都能跑）；
+
 - 数值上对齐 PyTorch `nn.GELU(approximate='tanh')`：fp32 下 `atol=2e-6` 以内。
 
-**测试重点 (examples/python/src/test_gelu.py)**
+**测试重点 (examples/python/src/test\_gelu.py)**
 
 1. `gelu_reference` 与 PyTorch tanh GELU 在 fp32 / fp16、各种 shape 下一致；
 2. dtype 保持、单调非减、符号一致性（`sign(y) == sign(x)`）；
@@ -294,7 +311,7 @@ gelu_reference = gelu_numpy
 
 **和 TBE 的关系？** TBE 早期就是：① 用 `te.compute` 写一段和上面结构一样的张量表达式，② 再用 `tvm.build` + `auto_schedule` 生成最终 NPU 二进制。这里的 Python 版恰好对应了 TBE 的**第①步（数学表达）**，第②步交给其他三种 NPU 真跑模型。
 
----
+***
 
 ### 8.3 Triton-Ascend —— "写一个 @triton.jit 就够了"
 
@@ -328,8 +345,11 @@ def gelu_kernel(x_ptr, y_ptr, N, BLOCK_SIZE: tl.constexpr):
 **硬件映射（triton-ascend 自动做的事）**
 
 - `tl.program_id(axis=0)` —— grid 一维，每个 program 对应一个 AI Core / 多个 program 复用 AI Core；
-- `tl.arange(0, BLOCK_SIZE)` —— 对应 Vector 单元一次处理 **BLOCK_SIZE 条 lane** 的向量指令；
+
+- `tl.arange(0, BLOCK_SIZE)` —— 对应 Vector 单元一次处理 **BLOCK\_SIZE 条 lane** 的向量指令；
+
 - `tl.load/store` —— 自动生成 GM↔UB 的 DMA 搬运 + mask 处理尾块；
+
 - `tl.math.tanh` —— 后端直接对接 Vector 核的 `tanh` 硬指令（或等效质量的多项式序列）。
 
 **怎么用（带 grid）**
@@ -341,16 +361,20 @@ gelu_kernel[grid](flat_h, y_h, N, BLOCK_SIZE=block_size)
 
 `examples/triton_ascend/src/test_gelu.py` 里对 1024 / 32×1024 / 4D / 奇数 N 四种情况都过了一次数值比对；在没有 NPU 的机器上会自动 `SKIP`，保证 CI 友好。
 
----
+***
 
 ### 8.4 TileLang-Ascend —— 显式写清 "GM ↔ UB ↔ Vector Scope"
 
 TileLang 的定位是"分块 (tiled) kernel DSL"：**tiling、内存层级、Scope、barrier 都必须显式写**。它把 NPU 的 *Vector / Cube / MTE2 / MTE3* 等概念直接映射进语言：
 
 - `T.alloc_UB` —— UB (Vector 核片上缓冲)
+
 - `T.Scope("M")` —— Vector 执行域 (M=MAC，代表 Vector 核)
+
 - `T.barrier_all()` —— MTE2→MTE1、MTE1→MTE3 等队列间的同步
+
 - `T.copy(src, dst)` —— DMA 搬运 (GM↔UB)
+
 - `T.Kernel(num_blocks, is_npu=True)` —— 告诉 tilelang-ascend 后端：这是 NPU 多核并行 kernel，不是 GPU thread block
 
 ```python
@@ -393,7 +417,7 @@ def gelu_activation(N: int, BLOCK: int, dtype: str = "float16"):
 
 **TileLang 版本对教学价值最大**：虽然它比 Triton 啰嗦，但读完这段代码，你会立刻明白之前 §5.1 那个 "GM→UB→Vector→UB→GM" 的流程图每一个箭头实际对应什么 API。`examples/tilelang_ascend/src/test_gelu.py` 在没装 CANN/NPU 的环境下会 `SKIP` 数值运行，但会验证 kernel 对象构造成功；有硬件时再跑完整数值比对。
 
----
+***
 
 ### 8.5 Ascend C —— "用 C++ 写到最低一层"
 
@@ -437,17 +461,20 @@ void gelu_kernel(GM_ADDR x, GM_ADDR y,
 **这里能"看到硬件"的点**
 
 - `GlobalTensor<half>`：half 类型 = fp16，对应 NPU 原生存储精度；`__gm__` 修饰符 = Global Memory 地址空间，跨地址空间不允许乱 cast（CANN 在编译期就会报错，帮你避开脏 bug）；
+
 - `tanh(inner)`：AscendC 自带的核内 math 实现，最终落到底层 Vector 数学指令（比标量级数近似快得多）；
+
 - 入参 `tiling`：host 用 `aclrtMemcpy` 把标量参数（这里就是 N）塞进 device，kernel 从 GM 读回来再用——这是所有非模板参数、运行时可变形状的标准传参方式。
 
 **版本定位**：上面的 Ascend C 实现是**教学版（标量朴素）**，不是性能版。性能版会写：
+
 1. `DataCopy(x[i*TILE : (i+1)*TILE], LocalTile)`（一次搬 1024+ 个 fp16 到 UB）；
 2. 调用 Vector 单元的 `Mul` / `Tanh` / `Muls` 指令对整个 tile 操作；
 3. `GetBlockIdx()` 把 N 维拆给多个 AI Core 并行；
 4. 双缓冲（pipeline）掩盖搬数据的延迟。
-这些就是在仓库的 Ascend C gemm README 里列过的优化 4 件套，搬到 GELU 上一模一样。
+   这些就是在仓库的 Ascend C gemm README 里列过的优化 4 件套，搬到 GELU 上一模一样。
 
----
+***
 
 ### 8.6 数值协议（所有实现必须满足）
 
@@ -457,28 +484,33 @@ void gelu_kernel(GM_ADDR x, GM_ADDR y,
 2. **dtype 一致**：输入 fp16 → 输出 fp16；输入 fp32 → 输出 fp32；
 3. **shape 一致**：任意 rank / 任意 shape，元素级映射（element-wise）；
 4. **误差容差**：
+
    - fp32 与 PyTorch `nn.GELU(approximate='tanh')`：`atol <= 2e-6, rtol <= 2e-6`；
+
    - fp16 与 Python/Triton/TileLang/Ascend C 互相：`atol <= 5e-3, rtol <= 5e-3`；
 5. **单调性 / 符号一致性**：GELU tanh 近似是单调的、且 `sign(y) == sign(x)`，所有实现都要通过这种 sanity check（`python/src/test_gelu.py` 里已经写了 monotone 和 sign 测试）。
 
 这些协议就是我们四种实现的"测试合同"。每种算子的 `test_gelu.py` 都在对齐它。
 
----
+***
 
 ### 8.7 Roofline 的一点提示（性能上怎么预期）
 
 GELU 完全是 element-wise，**每元素读 N 字节 + 写 2 字节 + 很少的计算**。在 Roofline 模型下：
 
-- 运算强度 I = FLOPs / Bytes ≈ (若干乘加 + 1 tanh) / (4 bytes) ≈ 2~4 FLOP/Byte；
-- 对 910B 的 HBM 带宽 ~1.6 TB/s 来说，瓶颈必然在 **带宽侧（memory bound）**。
+- 运算强度 I = FLOPs / Bytes ≈ (若干乘加 + 1 tanh) / (4 bytes) ≈ 2\~4 FLOP/Byte；
+
+- 对 910B 的 HBM 带宽 \~1.6 TB/s 来说，瓶颈必然在 **带宽侧（memory bound）**。
 
 因此：
 
 - 单独把 GELU 当算子跑，加速比不可能超过"搬数据本身的带宽上限"；
+
 - 真正的杀手优化永远是 §5.3 讲的——**和 FFN 的 GEMM epilogue 融合**，省掉一趟 GM 往返；
+
 - 不融合的话，四种 DSL 在内存带宽天花板前的差距其实很小，但 Ascend C 的手动双缓冲 + Vector tile 指令会略胜一筹，TileLang 因为能显式调度 MTE/Vector pipeline 紧随其后，Triton 靠 auto-tuner 逼近上限，Python 版只是 reference。
 
----
+***
 
 ### 8.5 可重复执行命令 (基准 4 家 + TileLang 可选)
 
