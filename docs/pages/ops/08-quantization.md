@@ -241,7 +241,69 @@ flowchart LR
 
 ---
 
-## 八、参考资料
+## 八、本仓库实现与实测（4 DSL，Ascend 910B2 / CANN 9.0.0，2026-09-05）
+
+### 8.1 四种 DSL 的实现说明
+
+实现口径：**逐行动态 absmax 对称 INT8 量化**（§5.3 的 per-row scale）+ 反量化，全链路
+`x (M,D) fp16 → (q int8, scale fp32) → x̂ fp16`：
+
+| DSL | 文件 | 核心策略 |
+|---|---|---|
+| NumPy 基准 | `examples/python/src/quant.py` | `quant_int8_reference` / `dequant_int8_reference`（amax/round 走 fp32，§2.1 公式直写） |
+| Triton-Ascend | `examples/triton_ascend/src/quant_triton.py` | 每 program 一行 2-pass：fp32 absmax 归约 → `floor(x/scale+0.5)` clamp 后 store int8；反量化逐元素乘行 scale |
+| TileLang-Ascend | `examples/tilelang_ascend/src/quant_tilelang.py` | 2D kernel：`T.tile.abs` + `T.reduce_max` → div 127 → `T.tile.cast` CAST_RINT 入 int8 UB；反量化 cast 回 fp16 乘 broadcast scale |
+| Ascend C | `examples/ascend_c/op_kernel/quant_kernel.cpp` + `src/quant_host.cpp` | 单 block 标量 2-pass；int8↔浮点全部走 `Cast` 内建（TPipe 真实 UB），scale 写 fp32 GM |
+
+**关键硬件踩坑（dav-c220）**：`Cast` 内建**没有 fp32↔int8 的直转实现**（编译报
+`no matching function for call to CastIntrinsicsImpl<signed char, float>`），必须经 fp16 中转
+（fp32 → fp16 → int8）。这带来 ~1% 元素的 ±1 LSB 量化级差异（fp16 网格舍入使部分值跨过
+0.5 边界）——±1 LSB 本就在量化噪声内，**硬标准是往返误差 ≤ 每行 scale**。
+
+### 8.2 正确性实测（2026-09-05，`vllm-hust-cyj-21rc-cloud-container-86`）
+
+校验：① q ∈ [-127,127]；② 与 numpy 参考的 q 一致率；③ scale 误差；④ **往返误差 ≤ 每行 scale**。
+
+| 实现 | 用例 | 通过 | q 一致率 | 往返误差 |
+|---|---|---|---|---|
+| NumPy 基准 | 值域/误差界/amax→±127/零行 | 全过 | — | ≤ max scale ✓ |
+| Triton-Ascend | 6 用例（odd-D、fp32、D>BLOCK、幅值 ×100） | **6/6** | > 99.9% (fp32 直算) | ≤ max scale ✓ |
+| TileLang-Ascend | 4 用例（D=128..4096、幅值 ×100） | **4/4** | ≥ 98.6% (fp16 中转) | ≤ max scale ✓ |
+| Ascend C | 16×512 / 64×4096 | **2/2** | ≥ 99% (fp16 中转) | ≤ max scale ✓ |
+
+### 8.3 性能实测（Triton，fp16，20 轮取最快，quant+dequant 全链路）
+
+| M×D | quant (ms) | dequant (ms) | 量化有效带宽 (GB/s) |
+|---|---|---|---|
+| 1024×512 | 0.265 | 0.257 | 5.9 |
+| 1024×4096 | 0.303 | 0.238 | 41.6 |
+| 4096×4096 | 0.639 | 0.435 | 78.8 |
+| 16384×4096 | 2.002 | 1.194 | **100.6** |
+
+Ascend C 标量版对照：1024×4096 quant+dequant 全链路 ≈ 634.5 ms（单 block 逐元素教学地板）。
+
+### 8.4 解读
+
+量化是纯逐元素 + 每行一次 absmax 归约，理论上 3 B/元素、完全带宽受限。实测 Triton 版
+在 16384×4096 达 **100 GB/s**，距 HBM 峰值尚远——瓶颈是**逐 program 一行的调度方式**：
+每行一个 program 在 M=16384 时产生 16384 个程序，kernel 启动/调度开销（~0.25 ms 固定底座）
+吃掉了小规模档位，大档位也被每行两趟的子块迭代拉低。把多行打包进一个 program
+（行向打包 + 二维 tile）是 obvious 的下一步。工程上更进一步是 quant 融合进前一个算子
+的 epilogue（§5.5），连 x 的 GM 读都省掉。
+
+### 8.5 可重复执行命令
+
+```bash
+cd examples/python && uv run python src/test_quant.py
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_quant.py
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_quant_triton.py
+cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_quant.py
+cd examples/ascend_c && ./build/ascend_quant 16 512
+```
+
+---
+
+## 九、参考资料
 
 - **FP8 格式论文**（Micikevicius et al., "FP8 Formats for Deep Learning", NVIDIA/Arm/Intel 联合白皮书）：
   https://arxiv.org/abs/2209.05433

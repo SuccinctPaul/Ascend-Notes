@@ -18,7 +18,7 @@
 
 ## 算子覆盖 (2026-09-05 实测)
 
-当前 5 个算子 × 4 种 DSL 全部跑通并通过正确性校验(服务器:`vllm-hust-cyj-21rc-cloud-container-86`,Ascend 910B2 + CANN 9.0.0):
+当前 8 个算子 × 4 种 DSL 全部跑通并通过正确性校验(服务器:`vllm-hust-cyj-21rc-cloud-container-86`,Ascend 910B2 + CANN 9.0.0):
 
 | 算子 | python 基准 | triton_ascend | tilelang_ascend | ascend_c | docs |
 |---|---|---|---|---|---|
@@ -27,8 +27,11 @@
 | GELU (逐元素激活) | ✅ | ✅ | ✅ | ✅ | [ops/05](docs/pages/ops/05-gelu.md) |
 | RMSNorm (归一化) | ✅ | ✅ 8/8 用例 | ✅ 5/5 用例 | ✅ err=0 (16×512) | [ops/02](docs/pages/ops/02-rmsnorm.md) |
 | RoPE (旋转位置编码) | ✅ | ✅ 7/7 用例 | ✅ 6/6 用例 | ✅ err=0 (16×128) | [ops/04](docs/pages/ops/04-rope.md) |
+| INT8 量化 (per-row absmax) | ✅ | ✅ 6/6 用例 | ✅ 4/4 用例 | ✅ 2/2 规模 | [ops/08](docs/pages/ops/08-quantization.md) |
+| GQA 解码注意力 (KV Cache) | ✅ | ✅ 6/6 用例 | ✅ 4/4 用例 | ✅ 2/2 规模 | [ops/06](docs/pages/ops/06-gqa-kvcache.md) |
+| FlashAttention 前向 (FA2) | ✅ | ✅ 6/6 用例 | ✅ 3/3 用例 | ✅ 2/2 规模 | [ops/07](docs/pages/ops/07-flash-attention.md) |
 
-RMSNorm / RoPE 的实现说明、正确性与性能实测数据见 docs 对应页面的"本仓库实现与实测"章节。
+各算子的实现说明、正确性与性能实测数据见 docs 对应页面的"本仓库实现与实测"章节。
 
 ## 实测结果 (Ascend 910B2 + CANN 9.0.0, GEMM 128³)
 
@@ -77,8 +80,8 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 ## 如何逐个运行
 
 ```bash
-# 0. python 基准 (CPU, 任意机器; gemm/softmax/gelu/rmsnorm/rope)
-cd examples/python && uv sync && uv run python src/gemm.py src/softmax.py src/gelu.py src/rmsnorm.py src/rope.py
+# 0. python 基准 (CPU, 任意机器; 8 个算子)
+cd examples/python && uv sync && uv run python src/gemm.py src/softmax.py src/gelu.py src/rmsnorm.py src/rope.py src/quant.py src/gqa.py src/flash.py
 
 # 1. ascend_c (需 CANN + NPU)
 cd examples/ascend_c && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
@@ -86,14 +89,17 @@ cd examples/ascend_c && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake 
 ./build/ascend_softmax 16 512  # Softmax
 ./build/ascend_rmsnorm 16 512  # RMSNorm
 ./build/ascend_rope 16 128     # RoPE
+./build/ascend_quant 16 512    # INT8 量化 (quant+dequant)
+./build/ascend_gqa 8 2 256 128 # GQA 解码注意力
+./build/ascend_flash 2 64 128 64  # FlashAttention
 
 # 2. triton_ascend (需 torch_npu + triton-ascend, 详见其 README)
 cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_gemm.py
-ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_softmax.py src/test_rmsnorm.py src/test_rope.py
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_softmax.py src/test_rmsnorm.py src/test_rope.py src/test_quant.py src/test_gqa.py src/test_flash.py
 
 # 3. tilelang_ascend (需 tilelang-ascend wheel, 详见其 README)
 cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 uv run python src/test_gemm.py
-ACL_OP_INIT_MODE=1 uv run python src/test_rmsnorm.py src/test_rope.py
+ACL_OP_INIT_MODE=1 uv run python src/test_rmsnorm.py src/test_rope.py src/test_quant.py src/test_gqa.py src/test_flash.py
 ```
 
 NPU 用例建议带 `ASCEND_RT_VISIBLE_DEVICES=<空闲卡号>` 指定设备。每个 DSL 的预期结果均包含 `PASS`。详见各目录 README。

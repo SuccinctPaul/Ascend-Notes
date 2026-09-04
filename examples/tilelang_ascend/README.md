@@ -111,6 +111,7 @@ export ACL_OP_INIT_MODE=1            # 必须, 见下节 TVM FFI 冲突
 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_gemm.py
 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rmsnorm.py
 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rope.py
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_quant.py src/test_gqa.py src/test_flash.py
 ```
 
 ### RMSNorm / RoPE 性能基准
@@ -133,8 +134,11 @@ Python/launch 开销主导耗时**, 数据反映的是本教学实现的真实�
 | `src/softmax_tilelang.py` | 1D 行 softmax 教学 kernel (T.serial 四阶段; 0.1.13 字符串注解风格, 待迁移) |
 | `src/rmsnorm_tilelang.py` | RMSNorm 2D kernel: T.tile.cast/mul + T.reduce_sum + T.tile.rsqrt/broadcast (Vector 内建指令) |
 | `src/rope_tilelang.py` | RoPE 2D kernel: (cid,vid) 双 Vector 核每核一行, T.serial 逐对 fp32 旋转 |
+| `src/quant_tilelang.py` | INT8 量化 2D kernel: T.tile.abs/reduce_max/div + fp16 中转 cast 入 int8 |
+| `src/gqa_tilelang.py` | GQA 解码 2D kernel: 每 program 一头, 逐 s 在线 softmax (原位 max/add) |
+| `src/flash_tilelang.py` | FA 前向 2D kernel: 每 program 一 query 行, 逐 s online m/l/acc 增量 |
 | `src/test_gemm.py` | numpy 参考 + torch_npu 驱动 + allclose 校验 (含 ACL_OP_INIT_MODE 处理) |
-| `src/test_rmsnorm.py` / `src/test_rope.py` | 多 D 档位正确性测试 (atol=1e-2, rtol=1e-2) |
+| `src/test_rmsnorm.py` / `src/test_rope.py` / `src/test_quant.py` / `src/test_gqa.py` / `src/test_flash.py` | 多档位正确性测试 (atol=1e-2, rtol=1e-2) |
 | `src/bench_tilelang_ops.py` | RMSNorm/RoPE 微基准 (per-row 循环口径) |
 | `pyproject.toml` | uv 配置 (numpy/torch==2.8.0); torch_npu/tilelang-ascend 手动装 |
 

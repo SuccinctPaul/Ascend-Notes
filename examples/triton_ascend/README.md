@@ -92,6 +92,7 @@ ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_gemm.py
 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_softmax.py
 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rmsnorm.py
 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rope.py
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_quant.py src/test_gqa.py src/test_flash.py
 ```
 
 预期输出(每个测试文件最后):
@@ -104,6 +105,9 @@ All N cases PASSED
 ```bash
 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_rmsnorm_triton.py --json /tmp/rmsnorm.json
 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_rope_triton.py --json /tmp/rope.json
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_quant_triton.py --json /tmp/quant.json
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_gqa_triton.py --json /tmp/gqa.json
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_flash_triton.py --json /tmp/flash.json
 ```
 
 2026-09-05 实测(910B2, fp16, best-of-20):RMSNorm 16384×4096 = **1.26 ms(213 GB/s)**;
@@ -120,8 +124,11 @@ RoPE 16384×2048 = **11.75 ms**(注意:`rope_triton` 需用 `tables=` 预构建�
 | `src/gelu_triton.py` | GELU 逐元素(tanh 近似) |
 | `src/rmsnorm_triton.py` | RMSNorm:每 program 一行,2-pass(fp32 Σx² → rsqrt → 乘 inv_rms·gamma) |
 | `src/rope_triton.py` | RoPE:kernel 内半维拆分布局 + wrapper 做 interleaved 转换;`tables=` 预构建查表 |
-| `src/test_gemm.py` / `test_softmax.py` / `test_gelu.py` / `test_rmsnorm.py` / `test_rope.py` | torch_npu 驱动 + numpy 参考 + allclose 校验(多 shape/dtype) |
-| `src/bench_gelu_triton.py` / `bench_rmsnorm_triton.py` / `bench_rope_triton.py` | 微基准:多规模 best-of-N ms + GB/s + 正确性断言 |
+| `src/quant_triton.py` | INT8 量化/反量化:逐行 fp32 absmax → round → int8 |
+| `src/gqa_triton.py` | GQA 解码注意力:每 program 一头,flash-decode 在线 softmax 单趟扫 KV cache |
+| `src/flash_triton.py` | FlashAttention FA2:tl.dot 走 Cube + online softmax,L×S 分数不落 GM |
+| `src/test_gemm.py` / `test_softmax.py` / `test_gelu.py` / `test_rmsnorm.py` / `test_rope.py` / `test_quant.py` / `test_gqa.py` / `test_flash.py` | torch_npu 驱动 + numpy 参考 + allclose 校验(多 shape/dtype) |
+| `src/bench_gelu_triton.py` / `bench_rmsnorm_triton.py` / `bench_rope_triton.py` / `bench_quant_triton.py` / `bench_gqa_triton.py` / `bench_flash_triton.py` | 微基准:多规模 best-of-N ms + GB/s + 正确性断言 |
 | `pyproject.toml` | uv 配置 (numpy/torch); torch_npu/triton-ascend 手动装 |
 
 ## 常见问题

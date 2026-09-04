@@ -15,6 +15,9 @@
 | GELU | `gelu.gelu_reference` | tanh 近似 (0.5x(1+tanh(√(2/π)(x+0.044715x³)))) |
 | RMSNorm | `rmsnorm.rmsnorm_reference` | `y = x / sqrt(mean(x²)+eps) · gamma` |
 | RoPE | `rope.rope_reference` | 交错配对二维旋转 `(x[2a],x[2a+1]) · (cos+i·sin)` |
+| INT8 量化 | `quant.quant_int8_reference` | 逐行 absmax 对称量化 + 反量化往返 |
+| GQA 解码 | `gqa.gqa_decode_reference` | 解码一步: q·KV cache 打分 + softmax + 加权 (分组) |
+| FlashAttention | `flash.attention_reference` | 标准注意力 (与 flash 数学等价) + online 增量版 |
 
 ## 数据精度约定
 
@@ -32,6 +35,9 @@
 | `src/gelu.py` | GELU 的 tanh 近似 / 精确 erf 版参考实现 |
 | `src/rmsnorm.py` | `rmsnorm_reference`(fp32 归约)+ `rmsnorm_naive`(fp16 归约误差对照) |
 | `src/rope.py` | `rope_reference` 查表版 + `apply_rope_numpy` 现算版 + θ/cos/sin 表预计算 |
+| `src/quant.py` | INT8 对称量化/反量化 + 往返误差上界 |
+| `src/gqa.py` | GQA/MQA/MHA 解码注意力 (KV Cache) |
+| `src/flash.py` | 标准注意力参考 + flash online 增量参考 (等价性验证) |
 | `src/test_*.py` | pytest 正确性测试(性质校验 + torch 交叉验证);`__main__` 可无 pytest 直接跑 smoke |
 | `src/tools.py` | 彩色耗时打印工具 |
 
@@ -40,7 +46,7 @@
 ```bash
 cd python
 uv sync                 # 安装依赖 (numpy, termcolor, pytest)
-uv run python src/gemm.py src/softmax.py src/gelu.py src/rmsnorm.py src/rope.py
+uv run python src/gemm.py src/softmax.py src/gelu.py src/rmsnorm.py src/rope.py src/quant.py src/gqa.py src/flash.py
 uv run pytest src/test_rmsnorm.py src/test_rope.py -v   # 完整 pytest
 ```
 

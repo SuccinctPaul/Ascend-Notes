@@ -127,9 +127,9 @@ flowchart LR
 | [03 · Softmax](/ops/03-softmax) | 三阶段 reduction、数值稳定、UB 内完成 | ✅ 实测（见 §八） |
 | [04 · RoPE 旋转位置编码](/ops/04-rope) | 旋转矩阵、复数乘法、Vector 实现 | ✅ 2026-09 实测（见 §八） |
 | [05 · GELU 与激活](/ops/05-gelu) | tanh 近似、逐元素、融合到 GEMM epilogue | ✅ 实测 |
-| [06 · GQA 与 KV Cache](/ops/06-gqa-kvcache) | 分组注意力、KV Cache 管理 | — |
-| [07 · FlashAttention](/ops/07-flash-attention) | 分块注意力、IO 复杂度优化 | — |
-| [08 · 量化与反量化](/ops/08-quantization) | INT8/fp8 量化、Cube 翻倍算力 | — |
+| [06 · GQA 与 KV Cache](/ops/06-gqa-kvcache) | 分组注意力、KV Cache 管理 | ✅ 2026-09 实测（见 §八） |
+| [07 · FlashAttention](/ops/07-flash-attention) | 分块注意力、IO 复杂度优化 | ✅ 2026-09 实测（见 §八） |
+| [08 · 量化与反量化](/ops/08-quantization) | INT8/fp8 量化、Cube 翻倍算力 | ✅ 2026-09 实测（见 §八） |
 | [09 · GEMM（四种 DSL 实证）](/ops/09-gemm) | 矩阵乘复用、tiling、Cube 16×16 MAC | ✅ 实测 |
 
 ---

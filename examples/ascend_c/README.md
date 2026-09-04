@@ -127,6 +127,9 @@ cmake -S . -B build -DSOC_VERSION=Ascend910B2   # 默认值
 | `op_kernel/gelu_kernel.cpp`(+ v3/v5/v6/scalar 变体) | GELU:Vector tile 流水线版 + 各代踩坑诊断版 |
 | `op_kernel/rmsnorm_kernel.cpp` + `src/rmsnorm_host.cpp` | RMSNorm:2-pass(fp32 Σx² → TPipe UB 上的 Sqrt → 乘 inv_rms·gamma);常数经 tiling `GlobalTensor.GetValue` 标量读 |
 | `op_kernel/rope_kernel.cpp` + `src/rope_host.cpp` | RoPE:交错配对旋转,host 预计算 cos/sin 表 (fp16) 下发,kernel 查表逐对 fp32 乘加 |
+| `op_kernel/quant_kernel.cpp` + `src/quant_host.cpp` | INT8 量化/反量化:per-row absmax;int8↔浮点走 Cast 内建 (dav-c220 无 fp32↔int8 直转,经 fp16 中转) |
+| `op_kernel/gqa_kernel.cpp` + `src/gqa_host.cpp` | GQA 解码注意力:标量 3-pass (打分→softmax→加权),scratch 存分数 |
+| `op_kernel/flash_kernel.cpp` + `src/flash_host.cpp` | FlashAttention:逐行 online softmax 两趟扫描,L×S 分数不整体物化 |
 | `CMakeLists.txt` | 构建:引 `ascendc.cmake` → `ascendc_library STATIC` 自动编+打包 kernel,g++ 编 host |
 
 ## 运行 (除 GEMM 外的算子)

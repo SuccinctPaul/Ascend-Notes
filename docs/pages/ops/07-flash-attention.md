@@ -233,7 +233,66 @@ flowchart LR
 
 ---
 
-## 八、参考资料
+## 八、本仓库实现与实测（4 DSL，Ascend 910B2 / CANN 9.0.0，2026-09-05）
+
+### 8.1 四种 DSL 的实现说明
+
+实现口径：FA2 前向（非因果），q/k/v (H,L,S->D) fp16 → out (H,L,D) fp16。
+ground truth 是标准注意力（§四 公式）—— **flash 与标准数学等价**，差的只是分数矩阵是否落 HBM：
+
+| DSL | 文件 | 核心策略 |
+|---|---|---|
+| NumPy 基准 | `examples/python/src/flash.py` | `attention_reference`（标准 softmax 注意力）+ `flash_online_reference`（严格 online 增量版，验证两者等价：实测误差 1.2e-4） |
+| Triton-Ascend | `examples/triton_ascend/src/flash_triton.py` | 每 program 一个 (head, q 分块)：QK^T/PV 走 `tl.dot`（映射 Cube），online softmax 行向量 m/l/acc 增量，**L×S 分数不落 GM**；K 预转置 (H,D,S) 免 `tl.trans` |
+| TileLang-Ascend | `examples/tilelang_ascend/src/flash_tilelang.py` | 每 program 一个 query 行（H×L 展开），逐 s 在线 max/exp/累加（(1,1) 原位 tile 操作），教学地板 |
+| Ascend C | `examples/ascend_c/op_kernel/flash_kernel.cpp` + `src/flash_host.cpp` | 单 block 标量逐行两趟扫描（running max → exp/累加），scratch 只存每行 exp 值 |
+
+### 8.2 正确性实测（2026-09-05，`vllm-hust-cyj-21rc-cloud-container-86`）
+
+| 实现 | 用例 | 通过 | 最大误差 |
+|---|---|---|---|
+| NumPy 基准 | online vs 标准等价 + 大幅值稳定 | 全过 | 1.2e-4 / 有限性 ✓ |
+| Triton-Ascend | 6 用例（L/S 非 BLOCK 倍数、D=128、单块、幅值 ×8） | **6/6** | ≤ **1.6e-2**（大幅值档） |
+| TileLang-Ascend | 3 用例小档位 | **3/3** | ≤ 6e-5 |
+| Ascend C | 2/64/128/64 与 2/128/256/128 | **2/2** | ≤ 9.8e-3 |
+
+### 8.3 性能实测（Triton，fp16，BLOCK_M=BLOCK_N=64，20 轮取最快）
+
+| H | L=S | D | 耗时 (ms) | KV 读取带宽 (GB/s) |
+|---|---|---|---|---|
+| 2 | 1024 | 64 | 0.380 | 1.4 |
+| 2 | 1024 | 128 | 0.407 | 2.6 |
+| 4 | 1024 | 128 | 0.484 | 4.3 |
+| 8 | 1024 | 128 | 0.675 | 6.2 |
+| 8 | 2048 | 128 | 1.762 | 4.8 |
+| 32 | 1024 | 128 | 1.789 | **9.4** |
+
+Ascend C 标量版对照：2/64/128/64 ≈ 24.1 ms、2/128/256/128 ≈ 182.8 ms（单 block 教学地板）。
+
+### 8.4 解读
+
+- FA 的 IO 复杂度是每头读一遍 KV（O(S·D)），**不物化 L×S 分数**是省 HBM 的关键 ——
+  标准 softmax 注意力在本规模要多写读 L×S 的分数矩阵（如 1024² fp16 = 2 MB/头）。
+- 实测带宽（9.4 GB/s 峰值）远低于 HBM 峰值，诚实地说本实现是**并行度受限**而非带宽受限：
+  grid = m块数 × H（如 8×1024²×128 只有 16×8=128 个 program），核心吃不满；
+  且每个 program 内 tl.dot 走 Cube 的固定 launch/同步开销被小 tile 放大。
+  教学版（BLOCK=64/64）刻意保守——扩大 BLOCK_M/N、flash-decode split-K 把 S 维也切给
+  更多核心，是标准优化路线（docs/06 §8.4 同因）。
+- 与 GQA 组合（KV 读取 ÷ Hq/Hkv）正是现代推理引擎的标准配置。
+
+### 8.5 可重复执行命令
+
+```bash
+cd examples/python && uv run python src/flash.py
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_flash.py
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_flash_triton.py
+cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_flash.py
+cd examples/ascend_c && ./build/ascend_flash 2 64 128 64
+```
+
+---
+
+## 九、参考资料
 
 - **FlashAttention 论文**（Tri Dao, Daniel Y. Fu et al., "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness", NeurIPS 2022）：
   https://arxiv.org/abs/2205.14135

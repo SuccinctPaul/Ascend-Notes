@@ -23,6 +23,9 @@ import numpy as np
 
 from rmsnorm_tilelang import rmsnorm_tilelang, rmsnorm_reference_numpy
 from rope_tilelang import rope_tilelang, rope_reference_numpy
+from quant_tilelang import quant_int8_tilelang, dequant_int8_tilelang, quant_int8_reference_numpy
+from gqa_tilelang import gqa_decode_tilelang, gqa_decode_reference_numpy
+from flash_tilelang import flash_attention_tilelang, attention_reference_numpy
 
 
 def _bench_loop(fn, warmup: int, repeats: int) -> float:
@@ -94,8 +97,58 @@ def main() -> int:
                                         ms_per_row=round(ms / T_, 4),
                                         GBps=round(gbps, 3), max_abs=max_abs))
 
-    obj = dict(benchmark="tilelang_ascend_rmsnorm_rope", SoC="910B2",
-               note="per-row 1D kernel, python loop over rows (teaching impl)",
+    # ---------------- INT8 量化 (quant+dequant 全链路) ----------------
+    print("op,quant: M,D,ms_best,ms_per_row,GBps,correctness_roundtrip")
+    summary["quant"] = []
+    for M in rows:
+        for D in dims:
+            x = (rng.standard_normal((M, D)) * 2.0).astype(np.float16)
+            q, scale = quant_int8_tilelang(x)
+            q_ref, scale_ref = quant_int8_reference_numpy(x)
+            y = dequant_int8_tilelang(q, scale)
+            rt = float(np.max(np.abs(y.astype(np.float32) - x.astype(np.float32))))
+            assert rt <= float(scale_ref.max()) + 1e-6, f"quant FAIL M={M} D={D}"
+            ms = _bench_loop(lambda: dequant_int8_tilelang(*quant_int8_tilelang(x)),
+                             args.warmup, args.repeats)
+            print(f"quant,{M},{D},{ms:.3f},{ms / M:.4f},{M * D * 3 / (ms * 1e-3) / 1e9:.2f},{rt:.4f}")
+            sys.stdout.flush()
+            summary["quant"].append(dict(M=M, D=D, ms=round(ms, 3),
+                                         ms_per_row=round(ms / M, 4), roundtrip=rt))
+
+    # ---------------- GQA 解码 (小档位) ----------------
+    print("op,gqa: Hq,Hkv,S,D,ms_best,ms_per_row,correctness_max_abs")
+    summary["gqa"] = []
+    for Hq, Hkv, S, D in [(4, 2, 64, 64), (8, 2, 128, 64)]:
+        q = (rng.standard_normal((Hq, D)) * 1.5).astype(np.float16)
+        k = (rng.standard_normal((Hkv, S, D)) * 1.5).astype(np.float16)
+        v = (rng.standard_normal((Hkv, S, D)) * 1.5).astype(np.float16)
+        out = gqa_decode_tilelang(q, k, v)
+        ref = gqa_decode_reference_numpy(q, k, v)
+        max_abs = float(np.max(np.abs(out.astype(np.float32) - ref.astype(np.float32))))
+        assert max_abs < 5e-2, f"gqa FAIL {Hq},{Hkv},{S},{D}"
+        ms = _bench_loop(lambda: gqa_decode_tilelang(q, k, v), args.warmup, args.repeats)
+        print(f"gqa,{Hq},{Hkv},{S},{D},{ms:.3f},{ms / Hq:.4f},{max_abs:.2e}")
+        sys.stdout.flush()
+        summary["gqa"].append(dict(Hq=Hq, Hkv=Hkv, S=S, D=D, ms=round(ms, 3), max_abs=max_abs))
+
+    # ---------------- FlashAttention (小档位) ----------------
+    print("op,flash: H,L,S,D,ms_best,ms_per_row,correctness_max_abs")
+    summary["flash"] = []
+    for H, L, S, D in [(1, 8, 64, 64), (2, 8, 64, 64)]:
+        q = (rng.standard_normal((H, L, D)) * 1.5).astype(np.float16)
+        k = (rng.standard_normal((H, S, D)) * 1.5).astype(np.float16)
+        v = (rng.standard_normal((H, S, D)) * 1.5).astype(np.float16)
+        out = flash_attention_tilelang(q, k, v)
+        ref = attention_reference_numpy(q, k, v)
+        max_abs = float(np.max(np.abs(out.astype(np.float32) - ref.astype(np.float32))))
+        assert max_abs < 5e-2, f"flash FAIL {H},{L},{S},{D}"
+        ms = _bench_loop(lambda: flash_attention_tilelang(q, k, v), args.warmup, args.repeats)
+        print(f"flash,{H},{L},{S},{D},{ms:.3f},{ms / (H * L):.4f},{max_abs:.2e}")
+        sys.stdout.flush()
+        summary["flash"].append(dict(H=H, L=L, S=S, D=D, ms=round(ms, 3), max_abs=max_abs))
+
+    obj = dict(benchmark="tilelang_ascend_ops", SoC="910B2",
+               note="per-row serial kernels, python loop over rows (teaching impl)",
                repeats=args.repeats, rows=summary)
     print("\n" + json.dumps(obj, ensure_ascii=False, indent=2), file=sys.stderr)
 
