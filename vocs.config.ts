@@ -7,10 +7,10 @@ import remarkGfm from 'remark-gfm'
 // scripts/check-mdx.mjs 会在构建前做这道防线。
 
 export default defineConfig({
-  title: 'Ascend NPU 知识库',
+  title: 'Ascend NPU 算子开发手册',
   description:
-    '面向 0→1 新手的 NPU 知识库，以昇腾 Ascend NPU 为核心，涵盖硬件架构、LLM 算子、性能优化与 Profiling。',
-  basePath: '/Ascend-Notes',
+    '面向 0→1 的 Ascend NPU 算子开发手册：硬件架构、性能模型、四种 DSL、LLM 算子优化、Profiling 与学术/产业前沿方案。',
+  basePath: '/ascend-handbook',
   // Config.resolve(options) 的第二个 pass 会强制把 rootDir 盖成 cwd。
   // 所以不要改 rootDir，只改 srcDir：让 pagesDir = <cwd>/<srcDir>/<pages> 指向 docs/pages。
   srcDir: 'docs',
@@ -22,11 +22,11 @@ export default defineConfig({
   socials: [
     {
       icon: 'github',
-      link: 'https://github.com/SuccinctPaul/Ascend-Notes',
+      link: 'https://github.com/SuccinctPaul/ascend-handbook',
     },
   ],
   editLink: {
-    pattern: 'https://github.com/SuccinctPaul/Ascend-Notes/edit/main/docs/pages/:path',
+    pattern: 'https://github.com/SuccinctPaul/ascend-handbook/edit/main/docs/pages/:path',
     text: '在 GitHub 上编辑',
   },
   sidebar: [

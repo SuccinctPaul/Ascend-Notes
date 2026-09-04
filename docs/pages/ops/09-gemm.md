@@ -1,8 +1,8 @@
 # 09 · GEMM（General Matrix Multiply）—— 本仓库的四种 DSL 实证
 
 > 目标读者：已经走完前面 8 篇的创新之旅，想把这套知识落到"一个真实的 GEMM kernel"上。
-> 本文用本仓库 Ascend-Notes 的真实实验数据（4 种 DSL）来讲 GEMM，聚焦矩阵乘复用、tiling、Cube 16×16 MAC。
-> 前置：请先看仓库 [README](https://github.com/SuccinctPaul/Ascend-Notes/blob/main/README.md) 与[术语表](/reference/context)。
+> 本文用本仓库 ascend-handbook 的真实实验数据（4 种 DSL）来讲 GEMM，聚焦矩阵乘复用、tiling、Cube 16×16 MAC。
+> 前置：请先看仓库 [README](https://github.com/SuccinctPaul/ascend-handbook/blob/main/README.md) 与[术语表](/reference/context)。
 
 ---
 

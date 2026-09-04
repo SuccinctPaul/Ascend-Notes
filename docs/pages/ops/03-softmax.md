@@ -572,7 +572,7 @@ graph LR
 
 ```bash
 # (1) Python/NumPy 参考基线:
-cd Ascend-Notes/
+cd ascend-handbook/
 python3 -m pytest examples/python/src/test_softmax.py -v
 # 或无 pytest 时:
 python3  examples/python/src/test_softmax.py
@@ -580,19 +580,19 @@ python3  examples/python/src/test_softmax.py
 # (2) Triton-Ascend NPU fp16 (需 CANN 9 + torch.npu + triton-ascend):
 bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
   source /root/miniconda3/etc/profile.d/conda.sh && conda activate vllm-hust-dev && \
-  cd Ascend-Notes/examples/triton_ascend/src && \
+  cd ascend-handbook/examples/triton_ascend/src && \
   python3 test_softmax.py"
 
 # (3) TileLang-Ascend (Python API smoke + 可选 NPU 真实运行):
 bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
   source /root/miniconda3/etc/profile.d/conda.sh && conda activate vllm-hust-dev && \
-  cd Ascend-Notes/examples/tilelang_ascend/src && \
+  cd ascend-handbook/examples/tilelang_ascend/src && \
   python3 test_softmax.py"
 
 # (4) Ascend C 生产版 / 标量地板版 (Host 内置校验):
 #     先编译 (CMake + CANN toolchain) 得到 bin/ascend_softmax, 再:
 bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
-  cd Ascend-Notes/examples/ascend_c/build && \
+  cd ascend-handbook/examples/ascend_c/build && \
   ./ascend_softmax 16 512          && \
   ./ascend_softmax 16 8192         && \
   ./ascend_softmax 16 8192 scalar"
@@ -602,7 +602,7 @@ bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
 
 ```bash
 # 一旦 examples/bench_softmax.py 编写完成（对齐 GELU bench 的 --which / --repeats / --sizes CLI 接口）:
-cd Ascend-Notes/
+cd ascend-handbook/
 bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
   source /root/miniconda3/etc/profile.d/conda.sh && conda activate vllm-hust-dev && \
   python3 examples/bench_softmax.py --run=numpy,triton,ascendc --which=both --repeats=15 \

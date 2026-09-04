@@ -198,7 +198,7 @@ sequenceDiagram
 
 **Cube 单元（硬件矩阵乘法引擎）**：不是逐元素算乘加，而是专用引擎——一次调用就算出 16×16 = 256 个输出元素的矩阵乘 `C += A·B`。A 分块 16×16、B 分块 16×16，硬件一个周期算出 C 分块 16×16；输入 fp16，片内 fp32 累加（见[混合精度](#混合精度-mixed-precision)词条）；中间结果暂存在 L0C（Cube 的专用累加缓冲）。
 
-![Cube 单元：一次 16×16 输出分块，fp16 输入、fp32 在 L0C 累加](/Ascend-Notes/cube-unit-16x16.png)
+![Cube 单元：一次 16×16 输出分块，fp16 输入、fp32 在 L0C 累加](/ascend-handbook/cube-unit-16x16.png)
 
 **Vector 单元**：做逐元素运算（加法、激活、归一化），一次处理一批元素。
 
@@ -209,7 +209,7 @@ sequenceDiagram
 数据流：GM（全局内存）→ L1 → L0A/L0B → Cube → L0C → UB → GM。
 
 
-![TileLang GEMM 调度时序：DMA 搬运与 Cube 计算并行，barrier 负责同步](/Ascend-Notes/tilelang-gemm-schedule.png)
+![TileLang GEMM 调度时序：DMA 搬运与 Cube 计算并行，barrier 负责同步](/ascend-handbook/tilelang-gemm-schedule.png)
 
 
 ## 术语词条 · 硬件与数据流

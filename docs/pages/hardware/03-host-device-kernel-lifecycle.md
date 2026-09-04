@@ -134,7 +134,7 @@ sequenceDiagram
 | tiling 设计 | 你/host | 定 M/K/N、分块、核数                    | host 算、device 用 |
 | kernel 实现 | 你      | 写 `__global__ __aicore__` 核函数    | 设备端代码           |
 | host 编排   | 你      | 写 main、调用运行时 API                 | 主机端代码           |
-| 编译        | 编译器    | bisheng 编译 + ascendc\_library 打包 | 只做一次，命令见 [Ascend C 手册](/dsl/04-ascend-c) 与 [examples/ascend_c](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c) |
+| 编译        | 编译器    | bisheng 编译 + ascendc\_library 打包 | 只做一次，命令见 [Ascend C 手册](/dsl/04-ascend-c) 与 [examples/ascend_c](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/ascend_c) |
 | load      | ACL    | 二进制加载进 device，拿 handle           | 只做一次            |
 | launch    | ACL    | 异步下发任务                           | CPU 立刻返回        |
 | 同步        | ACL    | 阻塞等全部完成                          | 读结果前必做          |

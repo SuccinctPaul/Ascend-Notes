@@ -1,7 +1,11 @@
-# Ascend-Notes
+# ascend-handbook
+
+**Ascend NPU 算子开发手册** —— 从硬件到前沿，从零到一。
 
 在 Ascend NPU 上,以 **GEMM (C = A×B)** 为案例,用 4 种不同 DSL 实现 kernel 并对比学习。
 每种 DSL 单独成目录,带详细中文注释与 README,讲述该 DSL 的工具链与运行方式。
+
+> 免责声明：本项目为个人学习笔记，与华为无隶属关系；Ascend 及相关名称为华为商标。
 
 ## 四种 DSL 目录
 

@@ -449,11 +449,11 @@ A: CANN 9.0.0 把该 enum 重命名为 `RT_LIMIT_TYPE_SIMT_DVG_WARP_STACK_SIZE`�
 - [昇腾 CANN 官方文档](https://www.hiascend.com/document)
 
 ### 本仓库文件
-- 示例代码：[`examples/triton_ascend/README.md`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend)
-- GEMM kernel：[`examples/triton_ascend/src/gemm_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/gemm_triton.py)
-- GELU kernel：[`examples/triton_ascend/src/gelu_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/gelu_triton.py)
-- Softmax kernel：[`examples/triton_ascend/src/softmax_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/softmax_triton.py)
-- GEMM 正确性测试：[`examples/triton_ascend/src/test_gemm.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/test_gemm.py)
-- GELU 性能基准：[`examples/triton_ascend/src/bench_gelu_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/bench_gelu_triton.py)
+- 示例代码：[`examples/triton_ascend/README.md`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend)
+- GEMM kernel：[`examples/triton_ascend/src/gemm_triton.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/gemm_triton.py)
+- GELU kernel：[`examples/triton_ascend/src/gelu_triton.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/gelu_triton.py)
+- Softmax kernel：[`examples/triton_ascend/src/softmax_triton.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/softmax_triton.py)
+- GEMM 正确性测试：[`examples/triton_ascend/src/test_gemm.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/test_gemm.py)
+- GELU 性能基准：[`examples/triton_ascend/src/bench_gelu_triton.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/bench_gelu_triton.py)
 - 术语对齐：[术语表 / 硬件架构](/reference/context)
 - 总览入口：[00 · 四种 DSL 核心手册总览](/dsl/00-dsl-overview)
