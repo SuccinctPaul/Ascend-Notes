@@ -225,6 +225,10 @@ K 维累加精度损失的标准做法。Python 基准同样在乘加前升 fp32
 
 ***
 
+## 延伸
+
+- 这四种 DSL 在产业界的分工与自动化趋势（自动 warp specialization、agent 调优）见 [编译器与 DSL 前沿](/sota/04-sota-compiler)。
+
 ## 参考资料
 
 **本仓库（可本地核验）：**

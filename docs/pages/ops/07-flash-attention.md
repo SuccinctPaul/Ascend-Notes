@@ -251,6 +251,12 @@ flowchart LR
 > 说明：HF `perf_infer_gpu_one` 为官方性能优化文档（README 中已多次被引用），Flash 相关内容在其 FlashAttention 章节；若子页路径调整，请从 https://huggingface.co/docs/transformers/en/perf_infer_gpu_one 导航。
 ---
 
+## 延伸
+
+- 这套原理的下一代（FA3 异步调度、MLA、稀疏注意力）见 [Attention 前沿](/sota/01-sota-attention)。
+
+---
+
 ## 上一篇 / 下一篇
 
 - 上一篇：[06 · GQA 与 KV Cache](/ops/06-gqa-kvcache)

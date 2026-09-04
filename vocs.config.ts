@@ -49,6 +49,19 @@ export default defineConfig({
       ],
     },
     {
+      text: '第 02 卷 · 性能模型与 Profiling',
+      collapsed: false,
+      items: [
+        { text: '00 · 如何计算 NPU 算力', link: '/perf/00-npu-peak-flops-calculation' },
+        { text: '01 · 性能模型与 Roofline', link: '/perf/01-roofline-perf-model' },
+        { text: '02 · Tiling 与流水线重叠', link: '/perf/02-tiling-pipeline-overlap' },
+        { text: '03 · Profiling 工具与读法', link: '/perf/03-profiling-tools' },
+        { text: '04 · 瓶颈识别与优化手段', link: '/perf/04-bottleneck-and-optimization' },
+        { text: '05 · 四种 DSL 实测解读', link: '/perf/05-dsl-benchmark-analysis' },
+        { text: '06 · 实战：GEMM 128³ Roofline 分析', link: '/perf/06-roofline-case-study' },
+      ],
+    },
+    {
       text: '第 03 卷 · 四种 DSL 核心手册',
       collapsed: false,
       items: [
@@ -75,24 +88,24 @@ export default defineConfig({
       ],
     },
     {
-      text: '第 02 卷 · 性能模型与 Profiling',
-      collapsed: false,
-      items: [
-        { text: '00 · 如何计算 NPU 算力', link: '/perf/00-npu-peak-flops-calculation' },
-        { text: '01 · 性能模型与 Roofline', link: '/perf/01-roofline-perf-model' },
-        { text: '02 · Tiling 与流水线重叠', link: '/perf/02-tiling-pipeline-overlap' },
-        { text: '03 · Profiling 工具与读法', link: '/perf/03-profiling-tools' },
-        { text: '04 · 瓶颈识别与优化手段', link: '/perf/04-bottleneck-and-optimization' },
-        { text: '05 · 四种 DSL 实测解读', link: '/perf/05-dsl-benchmark-analysis' },
-        { text: '06 · 实战：GEMM 128³ Roofline 分析', link: '/perf/06-roofline-case-study' },
-      ],
-    },
-    {
       text: '第 05 卷 · 构建与部署',
       items: [
         { text: '构建与部署说明', link: '/deployment' },
         { text: '术语表', link: '/reference/context' },
       ],
     },
+    {
+      text: '第 06 卷 · 前沿方案',
+      collapsed: false,
+      items: [
+        { text: '00 · 前沿方案总览', link: '/sota/00-sota-overview' },
+        { text: '01 · Attention 前沿', link: '/sota/01-sota-attention' },
+        { text: '02 · 量化前沿', link: '/sota/02-sota-quantization' },
+        { text: '03 · MoE 与解码前沿', link: '/sota/03-sota-moe-decode' },
+        { text: '04 · 编译器与 DSL 前沿', link: '/sota/04-sota-compiler' },
+        { text: '05 · 昇腾产业实践', link: '/sota/05-sota-ascend' },
+      ],
+    },
+
   ],
 })

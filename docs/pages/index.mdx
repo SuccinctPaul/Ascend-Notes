@@ -11,7 +11,7 @@
 
 ## TL;DR
 
-- **五卷一站式手册**：硬件架构 → 性能模型 → 四种 DSL 核心手册 → LLM 算子实战 → 构建部署与术语表。
+- **六卷一站式手册**：硬件架构 → 性能模型 → 四种 DSL 核心手册 → LLM 算子实战 → 前沿方案综述 → 构建部署与术语表。
 - **四种 DSL 并列**：Python（基准）→ Triton（块级自动）→ TileLang（显式调度）→ Ascend C（全手动）。
 - **实测对照**：Python 朴素 4.27 s → Triton 0.79 ms → TileLang 0.38 ms（128³ fp16, Ascend 910B2）。
 - 篇目遵循清晰的固定骨架：DSL 卷为「TL;DR → Background → Why → 正文 → 图表 → FAQ → 汇总 → 参考资料」，硬件/算子卷为「概述 → 定义 → 为什么 → 要点 → 常见误区 → TL;DR → 参考资料」。
@@ -26,6 +26,7 @@ flowchart LR
     A["第 01 卷<br/>硬件架构"] --> B["第 02 卷<br/>性能模型"]
     B --> C["第 03 卷<br/>四种 DSL 手册"]
     C --> D["第 04 卷<br/>算子实战"]
+    D --> F["第 06 卷<br/>前沿方案"]
     D --> E["第 05 卷<br/>构建与部署"]
     
     A1["AI Core / 存储 / host-device"] --> A
@@ -33,6 +34,7 @@ flowchart LR
     C1["Python → Triton → TileLang → Ascend C"] --> C
     D1["GEMM / Softmax / FlashAttention / ..."] --> D
     E1["部署 / 环境搭建"] --> E
+    F1["FA3 / MLA / FP8 / MoE / ATB / vllm-ascend"] --> F
 ```
 
 > **人话**：先懂硬件（算子跑在什么物理世界里），再懂性能模型（怎么算天花板），
@@ -129,6 +131,21 @@ flowchart LR
 | [07 · FlashAttention](/ops/07-flash-attention) | 分块注意力、IO 复杂度优化 |
 | [08 · 量化与反量化](/ops/08-quantization) | INT8/fp8 量化、Cube 翻倍算力 |
 | [09 · GEMM（四种 DSL 实证）](/ops/09-gemm) | 矩阵乘复用、tiling、Cube 16×16 MAC |
+
+---
+
+## 第 06 卷 · 前沿方案（学术与产业）
+
+截至 2026-09 的学术/产业最新方案综述，每篇回链正卷原理与可运行代码。
+
+| 篇目 | 内容 |
+|---|---|
+| [00 · 前沿方案总览](/sota/00-sota-overview) | 全景地图、阅读路径、与正卷的对应关系 |
+| [01 · Attention 前沿](/sota/01-sota-attention) | FlashAttention-3、MLA/FlashMLA、稀疏注意力 NSA→DSA |
+| [02 · 量化前沿](/sota/02-sota-quantization) | FP8 细粒度缩放、DeepGEMM、W4A8、FP4 |
+| [03 · MoE 与解码前沿](/sota/03-sota-moe-decode) | fused MoE、DeepEP、MTP/投机解码、superkernel、P/D 分离 |
+| [04 · 编译器与 DSL 前沿](/sota/04-sota-compiler) | Triton/TileLang/CuTe、自动 warp specialization、agent 调优 |
+| [05 · 昇腾产业实践](/sota/05-sota-ascend) | ATB/MindIE、vllm-ascend 自定义算子链路、CloudMatrix384 |
 
 ---
 

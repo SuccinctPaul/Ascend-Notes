@@ -253,6 +253,12 @@ flowchart LR
 > 说明：以上 HuggingFace 链接为官方文档常规地址；若主版本更新导致子页路径调整，请从 https://huggingface.co/docs/transformers/en/llm_optims 导航进入。
 ---
 
+## 延伸
+
+- KV 压缩的更进一步（MLA 低秩压缩、稀疏注意力）见 [Attention 前沿](/sota/01-sota-attention)。
+
+---
+
 ## 上一篇 / 下一篇
 
 - 上一篇：[05 · GELU 与激活](/ops/05-gelu)

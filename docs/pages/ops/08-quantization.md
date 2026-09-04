@@ -259,6 +259,12 @@ flowchart LR
 > 说明：昇腾 Cube 的 INT8 NZ 对齐参数（`C0_size=32`）可参见第 9 篇引用的 CANN `TCubeTiling` 官方文档。
 ---
 
+## 延伸
+
+- "按块 scale"的产业终局（FP8 细粒度缩放、DeepGEMM、W4A8、FP4）见 [量化前沿](/sota/02-sota-quantization)。
+
+---
+
 ## 上一篇 / 下一篇
 
 - 上一篇：[07 · FlashAttention](/ops/07-flash-attention)
