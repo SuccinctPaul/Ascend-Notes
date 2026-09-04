@@ -1,7 +1,7 @@
 # 07 · FlashAttention（在线 Softmax + 分块 + IO 感知）
 
-`>` 目标读者：已经懂 Softmax 和注意力，想搞懂"为什么现在大模型长上下文都要 FlashAttention"。
-`>` 本文把它拆成三件可理解的事——在线 Softmax、分块（tiling）、IO 感知，并落地到昇腾 NPU。
+> 目标读者：已经懂 Softmax 和注意力，想搞懂"为什么现在大模型长上下文都要 FlashAttention"。
+> 本文把它拆成三件可理解的事——在线 Softmax、分块（tiling）、IO 感知，并落地到昇腾 NPU。
 
 ---
 
@@ -67,7 +67,7 @@ flowchart LR
     O -->|"全部块处理完 除以 l"| OUT["输出 O_i"]
 ```
 
-`>` 人话：普通写法"先把整张打分表摊出来，再慢慢归一化、再乘 V"；Flash 写成"来一块，算一块，顺手归一化、顺手乘 V，丢一块。"打分表始终不落地。
+> 人话：普通写法"先把整张打分表摊出来，再慢慢归一化、再乘 V"；Flash 写成"来一块，算一块，顺手归一化、顺手乘 V，丢一块。"打分表始终不落地。
 
 ---
 
@@ -134,7 +134,7 @@ Flash 名字里的 "IO-aware" 指的是**把数据从慢速存储（HBM/GM）搬
 - 一个块被搬上片后，要**尽量反复复用**（L1 缓存、L0A/L0B 预取），而不是用完就丢、立刻回 GM 拿新的；
 - **矩阵乘复用**：`Q` 一块会跟多个 `K` 块相乘，`V`/`K` 块也会被多个 `Q` 行用——靠 L1/L0A/L0B 让这些复用发生在片上，而不是每次从 GM 重新拉。
 
-`>` 人话：把钱花在刀刃上的搬一次，剩下的“再算多块”都在片上内循环里完成，别反复去仓库取。
+> 人话：把钱花在刀刃上的搬一次，剩下的“再算多块”都在片上内循环里完成，别反复去仓库取。
 
 ### 5.3 最终实现还要"除以 l"：多块全部算完才收尾
 
@@ -198,7 +198,7 @@ flowchart LR
     W2 --> NOTE["显存 O(N)，用时更短"]
 ```
 
-`>` 注：上述 MB 数为示意性估算（`16384²×2`），用于说明"物化 vs 不物化"的量级差异，不是实测值。
+> 注：上述 MB 数为示意性估算（`16384²×2`），用于说明"物化 vs 不物化"的量级差异，不是实测值。
 
 ---
 
@@ -248,4 +248,16 @@ flowchart LR
 - 华为昇腾 CANN 官方文档（CANN 商用版版索引，检索 FlashAttention / 注意力相关算子与融合）：
   https://www.hiascend.cn/document
 
-`>` 说明：HF `perf_infer_gpu_one` 为官方性能优化文档（README 中已多次被引用），Flash 相关内容在其 FlashAttention 章节；若子页路径调整，请从 https://huggingface.co/docs/transformers/en/perf_infer_gpu_one 导航。
+> 说明：HF `perf_infer_gpu_one` 为官方性能优化文档（README 中已多次被引用），Flash 相关内容在其 FlashAttention 章节；若子页路径调整，请从 https://huggingface.co/docs/transformers/en/perf_infer_gpu_one 导航。
+---
+
+## 延伸
+
+- 这套原理的下一代（FA3 异步调度、MLA、稀疏注意力）见 [Attention 前沿](/sota/01-sota-attention)。
+
+---
+
+## 上一篇 / 下一篇
+
+- 上一篇：[06 · GQA 与 KV Cache](/ops/06-gqa-kvcache)
+- 下一篇：[08 · 量化与反量化](/ops/08-quantization)

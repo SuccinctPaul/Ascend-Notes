@@ -1,33 +1,10 @@
 import { defineConfig } from 'vocs/config'
 import remarkGfm from 'remark-gfm'
-import type { RemarkPlugin } from 'vocs/config'
 
-// 解析 MDX 前，把会被误判为 JSX 的语法预处理掉：
-//   1. `<https://url>` 自动链接 → `[url](url)`（纯 Markdown 链接）
-//   2. mermaid 代码块里的 `<br/>` 等 HTML 自闭合标签 → 空格
-// 这是一个最小、零依赖的 unified remark 插件，在 tokenize 前运行。
-const remarkPreprocess: RemarkPlugin = () => (tree, file) => {
-  const value = String(file.value)
-  let out = value
-  // 1) autolinks: <https://...> or <http://...> or <mailto:...> → [link](link)
-  out = out.replace(/<(https?:\/\/[^\s>]+)>/g, (_, url) => `[${url}](${url})`)
-  out = out.replace(/<(mailto:[^\s>]+)>/g, (_, url) => `[${url}](${url})`)
-  // 2) 在 ``` 代码围栏外，把 <br/>, <br />, <br> 替换为换行；
-  //    围栏内不处理（保持代码原样），因为 Vocs 会把围栏内交给 rehype/mermaid
-  const lines = out.split('\n')
-  let inFence = false
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*```/.test(lines[i])) {
-      inFence = !inFence
-      continue
-    }
-    if (!inFence) {
-      lines[i] = lines[i].replace(/<br\s*\/?>/gi, '\n')
-    }
-  }
-  file.value = lines.join('\n') as never
-  return tree
-}
+// 注意：Vocs 把 .md 也按 MDX 编译，源文件里不能出现会被当作 JSX 的语法：
+//   - `<https://url>` 自动链接（解析期直接报错），必须写成 `[url](url)`；
+//   - 代码围栏/行内代码之外的裸 `<xxx>` 标签。
+// scripts/check-mdx.mjs 会在构建前做这道防线。
 
 export default defineConfig({
   title: 'Ascend NPU 知识库',
@@ -39,8 +16,7 @@ export default defineConfig({
   srcDir: 'docs',
   renderStrategy: 'full-static',
   markdown: {
-    // 注意顺序：preprocess 要先跑（在 mdx-jsx 之前把语法冲突去掉），再跑 GFM。
-    remarkPlugins: [remarkPreprocess, remarkGfm],
+    remarkPlugins: [remarkGfm],
   },
   iconUrl: '/icon.svg',
   socials: [
@@ -63,7 +39,7 @@ export default defineConfig({
       link: '/reference/context',
     },
     {
-      text: 'NPU 体系化架构',
+      text: '第 01 卷 · NPU 体系化架构',
       collapsed: false,
       items: [
         { text: '01 · AI Core 硬件模型全貌', link: '/hardware/01-ai-core-overview' },
@@ -73,7 +49,31 @@ export default defineConfig({
       ],
     },
     {
-      text: 'LLM 优化算子',
+      text: '第 02 卷 · 性能模型与 Profiling',
+      collapsed: false,
+      items: [
+        { text: '00 · 如何计算 NPU 算力', link: '/perf/00-npu-peak-flops-calculation' },
+        { text: '01 · 性能模型与 Roofline', link: '/perf/01-roofline-perf-model' },
+        { text: '02 · Tiling 与流水线重叠', link: '/perf/02-tiling-pipeline-overlap' },
+        { text: '03 · Profiling 工具与读法', link: '/perf/03-profiling-tools' },
+        { text: '04 · 瓶颈识别与优化手段', link: '/perf/04-bottleneck-and-optimization' },
+        { text: '05 · 四种 DSL 实测解读', link: '/perf/05-dsl-benchmark-analysis' },
+        { text: '06 · 实战：GEMM 128³ Roofline 分析', link: '/perf/06-roofline-case-study' },
+      ],
+    },
+    {
+      text: '第 03 卷 · 四种 DSL 核心手册',
+      collapsed: false,
+      items: [
+        { text: '00 · 四种 DSL 总览', link: '/dsl/00-dsl-overview' },
+        { text: '01 · Python/NumPy 正确性基准', link: '/dsl/01-python-baseline' },
+        { text: '02 · Triton on Ascend', link: '/dsl/02-triton-ascend' },
+        { text: '03 · TileLang on Ascend', link: '/dsl/03-tilelang-ascend' },
+        { text: '04 · Ascend C 核心手册', link: '/dsl/04-ascend-c' },
+      ],
+    },
+    {
+      text: '第 04 卷 · LLM 优化算子',
       collapsed: false,
       items: [
         { text: '01 · element-wise 与算子融合', link: '/ops/01-elementwise-and-fusion' },
@@ -88,21 +88,24 @@ export default defineConfig({
       ],
     },
     {
-      text: '性能优化与 Profiling',
-      collapsed: false,
+      text: '第 05 卷 · 构建与部署',
       items: [
-        { text: '00 · 如何计算 NPU 算力', link: '/perf/00-npu-peak-flops-calculation' },
-        { text: '01 · 性能模型与 Roofline', link: '/perf/01-roofline-perf-model' },
-        { text: '02 · Tiling 与流水线重叠', link: '/perf/02-tiling-pipeline-overlap' },
-        { text: '03 · Profiling 工具与读法', link: '/perf/03-profiling-tools' },
-        { text: '04 · 瓶颈识别与优化手段', link: '/perf/04-bottleneck-and-optimization' },
-        { text: '05 · 四种 DSL 实测解读', link: '/perf/05-dsl-benchmark-analysis' },
-        { text: '06 · 实战：GEMM 128³ Roofline 分析', link: '/perf/06-roofline-case-study' },
+        { text: '构建与部署说明', link: '/deployment' },
+        { text: '术语表', link: '/reference/context' },
       ],
     },
     {
-      text: '构建与部署说明',
-      link: '/deployment',
+      text: '第 06 卷 · 前沿方案',
+      collapsed: false,
+      items: [
+        { text: '00 · 前沿方案总览', link: '/sota/00-sota-overview' },
+        { text: '01 · Attention 前沿', link: '/sota/01-sota-attention' },
+        { text: '02 · 量化前沿', link: '/sota/02-sota-quantization' },
+        { text: '03 · MoE 与解码前沿', link: '/sota/03-sota-moe-decode' },
+        { text: '04 · 编译器与 DSL 前沿', link: '/sota/04-sota-compiler' },
+        { text: '05 · 昇腾产业实践', link: '/sota/05-sota-ascend' },
+      ],
     },
+
   ],
 })

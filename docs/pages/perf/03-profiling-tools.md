@@ -1,11 +1,11 @@
 # 03 · Profiling 工具使用与输出读法
 
-`>` 面向 0→1 新手：诺，NPU 就这几台"体检仪器"——`msprof` 采数据、`msprof op` 单算子细采、
-`>` **MindStudio Insight / Ascend Insight** 看可视化图。这篇教你：怎么跑、跑完看哪个文件、哪几列代表什么。
+> 面向 0→1 新手：诺，NPU 就这几台"体检仪器"——`msprof` 采数据、`msprof op` 单算子细采、
+> **MindStudio Insight / Ascend Insight** 看可视化图。这篇教你：怎么跑、跑完看哪个文件、哪几列代表什么。
 
-`>` ⚠️ 前置免责声明（重要）：
-`>` 本文所有**命令都必须在你本机装有 CANN 的昇腾环境里实测验证**后才能信（社区版 / 商用版 / CANN 版本的参数名会有细微差异）。
-`>` **具体可执行字节数、阈值、个别参数名，凡我未能直接核实的，都标了"待核验"。** 严禁把它当圣经直接抄。
+> ⚠️ 前置免责声明（重要）：
+> 本文所有**命令都必须在你本机装有 CANN 的昇腾环境里实测验证**后才能信（社区版 / 商用版 / CANN 版本的参数名会有细微差异）。
+> **具体可执行字节数、阈值、个别参数名，凡我未能直接核实的，都标了"待核验"。** 严禁把它当圣经直接抄。
 
 ---
 
@@ -40,8 +40,8 @@
 | **Ascend Insight / MindStudio Insight** | 可视化看图工具：把 msprof 出的 json/csv 展示成 timeline、热力图、Roofline 图 | 想看图的你 |
 | （顺带澄清）**msprobe** | ⚠️ 华为语境下的 **msprobe 其实是"精度调试"工具**（精度预检/溢出检测/精度比对），**不是性能分析工具** | 查精度问题的人 |
 
-`>` ⚠️ **重要澄清**：任务里提到 "msprobe" 常被误当成 profiling 工具，但按华为官方文档（MindStudio Training Tools 文档），
-`>` **msprobe 归口在"精度调试"（accuracy tools）**，负责精度预检、溢出检测、精度比对等，与性能分析是两个方向。别把它和 `msprof` 混为一谈。
+> ⚠️ **重要澄清**：任务里提到 "msprobe" 常被误当成 profiling 工具，但按华为官方文档（MindStudio Training Tools 文档），
+> **msprobe 归口在"精度调试"（accuracy tools）**，负责精度预检、溢出检测、精度比对等，与性能分析是两个方向。别把它和 `msprof` 混为一谈。
 
 ---
 
@@ -67,7 +67,7 @@ msprof op ./gemm_demo
 msprof op --aic-metrics=PipeUtilization --output=./out ./gemm_demo
 msprof op --config=<你的算子配置.json> --output=./out
 ```
-`>` 其中 `--aic-metrics` 常见取值有：`ArithmeticUtilization`、`PipeUtilization`（默认）、`Memory`、`MemoryL0`、`MemoryUB`、`ResourceConflictRatio`、`L2Cache`（不同产品型号支持的集合不同，**请以官方文档列出的为准**）。
+> 其中 `--aic-metrics` 常见取值有：`ArithmeticUtilization`、`PipeUtilization`（默认）、`Memory`、`MemoryL0`、`MemoryUB`、`ResourceConflictRatio`、`L2Cache`（不同产品型号支持的集合不同，**请以官方文档列出的为准**）。
 
 跑完会在 `--output` 目录下生成两种东西：
 - 整程序路径下：`PROF_XXX/.../mindstudio_profiler_output/` 里有 `msprof_*.json`、`op_summary_*.csv`、`op_statistic_*.csv`、`api_statistic_*.csv` 等。
@@ -98,7 +98,7 @@ msprof op --config=<你的算子配置.json> --output=./out
 
 **③ 单算子模式出来的 `PipeUtilization_*.csv`（流水占用）** —— 这是判断瓶颈类型的关键文件，每行对应一个核（`block_id` = 核 id，`sub_block_id` = 该 block 内引擎名）。核心列：
 
-| 列 | 对应 CONTEXT.md 的引擎 | 含义 |
+| 列 | 对应 [术语表](/reference/context) 的引擎 | 含义 |
 |---|---|---|
 | `aic_*` 系 | Cube（矩阵乘） | Cube 引擎相关时间/占比 |
 | `aiv_*` 系 | Vector（逐元素） | Vector 引擎相关时间/占比 |
@@ -107,11 +107,11 @@ msprof op --config=<你的算子配置.json> --output=./out
 | `aic_mte1_*` | DMA 的 L1→L0A/L0B（MTE1） | 喂给 Cube 输入的搬运占比 |
 | `aic_fixpipe_*` | L0C 的相关通路 | 累加/回写相关占比 |
 
-`>` 大致判读（**这里给的是社区常见的经验阈值，正式判定请以官方文档数值为准，标"待核验"**）：
-`>` - `*_mte2_*` 传输占比很高（例如 `>50`%）→ **搬运是瓶颈** → 去扩 tiling / 加深流水 / 提高数据复用（见 `02`）。
-`>` - `aic_cube_ratio`（Cube 指令 cycle 占比）偏低而且算子本身是矩阵乘 → **Cube 利用率低** → 数学费在计算调度上（见 `04`）。
-`>` - `*_scalar_*` 占比偏高 → 标量/控制流（如循环、地址计算）拖了后腿。
-`>` - 各核 `*_time` 差异很大 → **核间负载不均衡** → 改 tiling 切分策略。
+> 大致判读（**这里给的是社区常见的经验阈值，正式判定请以官方文档数值为准，标"待核验"**）：
+> - `*_mte2_*` 传输占比很高（例如 `>50`%）→ **搬运是瓶颈** → 去扩 tiling / 加深流水 / 提高数据复用（见 `02`）。
+> - `aic_cube_ratio`（Cube 指令 cycle 占比）偏低而且算子本身是矩阵乘 → **Cube 利用率低** → 数学费在计算调度上（见 `04`）。
+> - `*_scalar_*` 占比偏高 → 标量/控制流（如循环、地址计算）拖了后腿。
+> - 各核 `*_time` 差异很大 → **核间负载不均衡** → 改 tiling 切分策略。
 
 **人话**：`PipeUtilization` 就是那张"各流水单元干了多少活"的体检表——谁占的时间最长，谁就是瓶颈。
 
@@ -168,13 +168,13 @@ msprof op --config=<你的算子配置.json> --output=./out
 5. **msprobe 是精度工具不是性能工具**，别搞混。
 6. 所有命令**先在装有 CANN 的环境实测**再采信。
 
-`>` 记住一句话：**先广角找最慢的算子，再微距看它卡在哪条流水，最后用两次采样的对比验优化。**
+> 记住一句话：**先广角找最慢的算子，再微距看它卡在哪条流水，最后用两次采样的对比验优化。**
 
 ---
 
 ## 附：一个"读 PipeUtilization.csv"的走读样例（编造示意，仅供学会看列）
 
-`>` ⚠️ 下面是**找规律用的示意数字，不是真实采集值**，只为演示"每列怎么读"，别拿这些数字当真。
+> ⚠️ 下面是**找规律用的示意数字，不是真实采集值**，只为演示"每列怎么读"，别拿这些数字当真。
 
 ```
 block_id  sub_block_id  aic_cube_ratio  aiv_vec_ratio  ai*_mte2_ratio  ai*_scalar_ratio
@@ -187,13 +187,13 @@ block_id  sub_block_id  aic_cube_ratio  aiv_vec_ratio  ai*_mte2_ratio  ai*_scala
 - 两个核的数值几乎一样 → 这行数据里**核间均衡**没问题（若差异很大则说明切分不均）。
 - 结论：优先做"把搬运藏进计算"（扩 tiling / 加深流水），而不是堆算法。
 
-`>` 真正的采集值请以你实跑的 csv 为准；我上面给的这套"读数逻辑"和 `04` 的判定表是配套的。
+> 真正的采集值请以你实跑的 csv 为准；我上面给的这套"读数逻辑"和 `04` 的判定表是配套的。
 
 ---
 
 ## 参考资料
 
-`>` 以下均为公开可核验来源，写本文时逐一抓取确认过链接可访问（部分为版本化地址，若失效请在本域名内搜索对应章节标题）。
+> 以下均为公开可核验来源，写本文时逐一抓取确认过链接可访问（部分为版本化地址，若失效请在本域名内搜索对应章节标题）。
 
 - 华为昇腾 msProf 工具概述（算子级性能采集）：
   - https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/80RC3alpha002/devaids/auxiliarydevtool/atlasopdev_16_0082.html
@@ -212,4 +212,4 @@ block_id  sub_block_id  aic_cube_ratio  aiv_vec_ratio  ai*_mte2_ratio  ai*_scala
 - Ascend C 官方文档/调试工具 Profiling 数据采集功能的指标清单（`PipeUtilization`、`MemoryL0/L2Cache/ResourceConflictRatio` 等指标名出自此，可核对 `--aic-metrics` 取值）：
   - https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/80RC3alpha002/devaids/auxiliarydevtool/atlasascendebug_16_0126.html
 
-`>` 注：`PipeUtilization` 里各类占比的"经验阈值"来自社区整理（我看到的是标注引用 MindStudio 8.3.0 文档的二手资料），我未逐项在官方一手文档上核实，**已统一标为"待核验"**；判定瓶颈请以官方数值和你的实测为准。
+> 注：`PipeUtilization` 里各类占比的"经验阈值"来自社区整理（我看到的是标注引用 MindStudio 8.3.0 文档的二手资料），我未逐项在官方一手文档上核实，**已统一标为"待核验"**；判定瓶颈请以官方数值和你的实测为准。

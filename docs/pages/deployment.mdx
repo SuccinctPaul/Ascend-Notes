@@ -30,7 +30,7 @@ npm install --legacy-peer-deps
 npm run dev
 ```
 
-浏览器打开 `http://localhost:5173`，修改 `src/pages/` 下的文件会自动热刷新。
+浏览器打开 `http://localhost:5173`，修改 `docs/pages/` 下的文件会自动热刷新（`vocs.config.ts` 里 `srcDir: 'docs'` 指向它）。
 
 ## 2. 本地构建
 
@@ -77,22 +77,38 @@ https://succinctpaul.github.io/Ascend-Notes/
 ```
 Ascend-Notes/
 ├── .github/workflows/deploy-docs.yml   # GitHub Actions 部署脚本
-├── docs/                                # Vocs 根目录
+├── docs/                                # Vocs srcDir（vocs.config.ts: srcDir: 'docs'）
 │   ├── pages/                           # 文档页面（文件路由）
 │   │   ├── index.mdx                    # 首页（landing 布局）
-│   │   ├── hardware/                    # 一、NPU 体系化架构
-│   │   ├── ops/                         # 二、LLM 优化算子
-│   │   ├── perf/                        # 三、性能优化与 Profiling
+│   │   ├── hardware/                    # 第 01 卷 · NPU 体系化架构
+│   │   ├── perf/                        # 第 02 卷 · 性能模型与 Profiling
+│   │   ├── dsl/                         # 第 03 卷 · 四种 DSL 核心手册
+│   │   ├── ops/                         # 第 04 卷 · LLM 优化算子
 │   │   ├── reference/                   # 术语表
 │   │   └── deployment.mdx              # 本文件
-│   └── public/                          # 静态资源（图片等）
-├── src/pages/                           # 软链接到 docs/pages（Vocs 搜索索引需要）
+├── public/                              # 静态资源（图片等，Vocs 约定在项目根）
+├── examples/                            # 四种 DSL 的可运行 kernel 与基准脚本
+├── scripts/                             # check-mdx.mjs 等构建辅助脚本
 ├── vocs.config.ts                       # Vocs 配置（sidebar、socials、editLink 等）
 ├── package.json                         # npm 依赖与脚本
 └── .gitignore
 ```
 
-## 5. 常见问题
+> 图片等静态资源放在项目根的 `public/`（Vocs 约定位置），Markdown 里用站点绝对路径引用（如 `/Ascend-Notes/cube-unit-16x16.png`，前缀是 `basePath`）。
+
+## 5. NPU 开发环境（算子开发侧）
+
+本页上面讲的是"文档站"的构建部署；要**跑 `examples/` 里的 NPU kernel**，需要的是另一套环境：
+
+1. **硬件**：Ascend 910B 系列 NPU（仓库实测 Ascend 910B2）。
+2. **驱动与 CANN**：CANN 9.0.0（每个 shell 先 `source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh`）。
+3. **Python 系 DSL**（python / triton_ascend / tilelang_ascend）：各自目录 `uv sync` 建 venv，torch / torch_npu / triton-ascend / tilelang-ascend 的版本锁见各目录 README 与 `pyproject.toml`。
+4. **C++ DSL**（ascend_c）：CMake + CANN 的 `ascendc.cmake` 框架，构建命令见 [Ascend C 手册 §3.4.5](/dsl/04-ascend-c)。
+
+常见运行期故障（`E39007`、`rtSetDevice 507033`、HDC 链路 hang、`ACL_OP_INIT_MODE=1` 等）
+的排查清单见 [GELU 篇 §8.10](/ops/05-gelu) 的验证步骤与常见坑总表。
+
+## 6. 常见问题
 
 ### Q: `npm install` 报 peer dependency 冲突？
 
@@ -111,6 +127,13 @@ flowchart LR
   A --> B
 ```
 ````
+
+注意：`npm run dev` 使用的是自定义启动脚本 `scripts/dev-vite.mjs`（而非 `vocs dev`），
+它注入了 `optimizeDeps: { include: ['mermaid'] }`。原因：vocs 客户端动态 `import('mermaid')`，
+而 rolldown-vite 对这条链不做运行时依赖预构建，mermaid 的 CJS 依赖 dayjs（只有 UMD 入口）
+会被原样发给浏览器，报 `does not provide an export named 'default'` 导致图不渲染。
+预构建后 dayjs 被转成 ESM 一并打包，问题消失。若未来 vocs 原生修复，可把 dev 脚本改回
+`vocs dev` 并删除该文件。
 
 ### Q: 如何修改 sidebar 导航？
 

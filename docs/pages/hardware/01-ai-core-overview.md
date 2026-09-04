@@ -1,15 +1,16 @@
 # 01 · 昇腾 AI Core 硬件模型全貌
 
-`>` 面向 0 到 1 新手的「NPU 体系化架构」第一篇。今天我们回答一个问题：
-`>` **一个算子到底跑在什么样的“物理世界”里？**
+> 面向 0 到 1 新手的「NPU 体系化架构」第一篇。今天我们回答一个问题：
+> **一个算子到底跑在什么样的“物理世界”里？**
 
 ---
 
 ## 一、概述
 
 昇腾（Ascend）NPU 的算力，核心来自一种叫 **AI Core** 的计算核心。你可以把
-AI Core 想成一个「流水线工厂」：里面有四个各司其职的小车间（**Cube、Vector、
-Scalar、DMA**），还有一排存放半成品的货架（**L1、L0A/L0B/L0C、UB**）。
+AI Core 想成一个「流水线工厂」：里面有四个各司其职的小车间——三个算力车间
+（**Cube、Vector、Scalar**）加一个搬运工（**DMA**），还有一排存放半成品的货架
+（**L1、L0A/L0B/L0C、UB**）。
 
 这个工厂和一个 CPU 工厂最大的不同是：**每个车间都只认自己眼前的那排货架，
 谁也不能跨区拿别人的货**——数据想从一个货架搬到另一个货架，必须走唯一的
@@ -19,8 +20,9 @@ Scalar、DMA**），还有一排存放半成品的货架（**L1、L0A/L0B/L0C、
 从「一个 AI Core 内部」讲到「几十个 AI Core 的芯片级集群」，最后用一条数据流
 把整个物理世界串起来。
 
-本仓库的 `CONTEXT.md` 已对这项内容做了严谨建模（术语、访问权域、数据流），
-本讲在「严格对齐其术语」的前提下，把面向新手的入门讲解展开得更充分。
+全站术语以[术语表](/reference/context)为权威口径，本讲在其基础上把面向新手的
+入门讲解展开得更充分。本卷讲解以仓库实测环境（**Ascend 910B2 + CANN 9.0.0**）为背景；
+具体容量/频率数字以官方规格书为准。
 
 ---
 
@@ -49,8 +51,8 @@ Scalar、DMA**），还有一排存放半成品的货架（**L1、L0A/L0B/L0C、
 - **中观视角**：一个 AI Core = 四引擎（Cube/Vector/Scalar/DMA）+ 一排片上货架。
 - **微观视角**：一次计算 = “搬数据进去 → 引擎算 → 结果放哪 → 要不要再搬”。
 
-`>` **人话**：AI Core 是一个小的“异构工厂”，里面 3 个算力车间（Cube/Vector/Scalar）
-`>` + 1 个搬运工（DMA）+ 一排货架（L1/L0A/B/C/UB）。
+> **人话**：AI Core 是一个小的“异构工厂”，里面 3 个算力车间（Cube/Vector/Scalar）
+> + 1 个搬运工（DMA）+ 一排货架（L1/L0A/B/C/UB）。
 
 ---
 
@@ -60,7 +62,7 @@ Scalar、DMA**），还有一排存放半成品的货架（**L1、L0A/L0B/L0C、
 
 GEMM 所有性能优化，本质都是同一句话：
 
-`>` **尽量把数据搬进片上、喂给 Cube、反复复用，少回 GM 去取。**
+> **尽量把数据搬进片上、喂给 Cube、反复复用，少回 GM 去取。**
 
 看不懂“引擎 + 货架”，你就不知道为什么`tiling`要把矩阵切成 16 的倍数、为什么
 要 double buffer、为什么 L0C 要 fp32 累加。看懂之后，这些优化全是“顺理成章”。
@@ -76,7 +78,7 @@ GEMM 所有性能优化，本质都是同一句话：
 工程里 90% 的瓶颈在**搬运**而不是**计算**。看懂数据流，等于拿到一把“性能
 放大镜”——一眼看出哪里多搬了一趟、哪里没复用。
 
-`>` **人话**：不懂硬件模型，你看优化文章只能“跟着抄”，看懂了才能“自己造”。
+> **人话**：不懂硬件模型，你看优化文章只能“跟着抄”，看懂了才能“自己造”。
 
 ---
 
@@ -115,7 +117,7 @@ flowchart TB
 | **Scalar** | 循环控制、地址计算、判断，数据进 Cube/Vector 前的“编排” | 调度员 |
 | **DMA** | 在 GM/共享存储/L1/L0/UB 之间搬数据，**不计算** | 搬运工 |
 
-`>` **人话**：Cube 是“速度之王”，Vector 是“杂活王”，Scalar 是“指挥”，DMA 是“搬运工”。
+> **人话**：Cube 是“速度之王”，Vector 是“杂活王”，Scalar 是“指挥”，DMA 是“搬运工”。
 
 ### 4.2 三层世界的芯片级全貌
 
@@ -144,8 +146,8 @@ flowchart TB
   核 A 的中间结果经它转给核 B。
 - **最里层 每个 AI Core 内部**：L1 → L0A/B → Cube → L0C → UB，最快、容量最小。
 
-`>` **人话**：数据离算力越近越快，但容量越小。高性能算子的全部功课，就是把数据
-`>` 尽量往里层搬、反复复用。
+> **人话**：数据离算力越近越快，但容量越小。高性能算子的全部功课，就是把数据
+> 尽量往里层搬、反复复用。
 
 ### 4.3 三条物理事实（一切以这为准）
 
@@ -161,7 +163,7 @@ flowchart TB
 4. **DMA 是唯一“搬运工”**：跨存储层移动、跨域搬运（如 L0C→UB），必须经 DMA，
    没有引擎能直接读别的缓冲。
 
-`>` **人话**：每个引擎都有自己的“领空”；想跨界，只能叫 DMA 帮忙搬货。
+> **人话**：每个引擎都有自己的“领空”；想跨界，只能叫 DMA 帮忙搬货。
 
 ### 4.4 多核怎么并行
 
@@ -174,7 +176,7 @@ flowchart TB
 所以可以简单按行/列把输出 C 切成若干块，分给不同 AI Core 各算各的，几乎不用
 跨核通信。
 
-`>` **人话**：GEMM 天然“各核各算各的 C”，多核并行是手到擒来。
+> **人话**：GEMM 天然“各核各算各的 C”，多核并行是手到擒来。
 
 ### 4.5 一次 GEMM 在 AI Core 上的走位（图文对照）
 
@@ -193,8 +195,8 @@ flowchart TB
 
 这一步一步，**都是 kernel 代码显式发起的**——你必须亲手指挥 DMA 每一步。
 
-`>` **人话**：算 C 的过程 = “把 A/B 搬进厂 → Cube 算 → 想加激活就搬到 UB 加工 →
-`>` 成品搬回仓库”，全程你都得亲自下指令。
+> **人话**：算 C 的过程 = “把 A/B 搬进厂 → Cube 算 → 想加激活就搬到 UB 加工 →
+> 成品搬回仓库”，全程你都得亲自下指令。
 
 ### 4.6 一条完整数据流串起来
 
@@ -210,9 +212,9 @@ flowchart LR
     A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7
 ```
 
-`>` 数据从 GM（仓库）出发，经 DMA 穿进 AI Core，喂给 Cube 算完累加在 L0C，
-`>` 要加工就搬到 UB 给 Vector，最后原路 DMA 回 GM。**全程每一级搬运都是 kernel
-`>` 代码显式发起的。**
+> 数据从 GM（仓库）出发，经 DMA 穿进 AI Core，喂给 Cube 算完累加在 L0C，
+> 要加工就搬到 UB 给 Vector，最后原路 DMA 回 GM。**全程每一级搬运都是 kernel
+> 代码显式发起的。**
 
 ---
 
@@ -240,7 +242,7 @@ Vector 才能算。这就是“为什么不能在 L0C 上做 ReLU”的硬件原
 **要辩证。** 只有当“搬运/通信开销 `<` 切分省下的计算时间”时才加速。好在 GEMM
 天然无核间依赖，是最适合多核并行的一类算子。
 
-`>` **人话**：记住三句话——货架要自己搬、L0C 不能直连 UB、谁也别直接摸 GM。
+> **人话**：记住三句话——货架要自己搬、L0C 不能直连 UB、谁也别直接摸 GM。
 
 ---
 
@@ -256,13 +258,15 @@ Vector 才能算。这就是“为什么不能在 L0C 上做 ReLU”的硬件原
 
 ## 七、参考资料（官方来源）
 
-`>` 以下链接均已核实，可在昇腾官方域名下访问。
+> 以下链接均为昇腾官方来源（撰写时可访问；文档站随版本改版，若失效请从 CANN 文档中心首页进入，本仓库实测环境为 CANN 9.0.0）。
 
-- 华为昇腾 · Ascend C 编程模型概述（AI Core 硬件基础、SIMD/SIMT、AI CPU）：
-  https://asc.gitcode.com/guide/编程指南/编程模型/编程模型概述.html
-- 华为昇腾 · C++ Tensor 编程概述（内存层级 GM→L1/L0 与 GM→UB、LocalTensor/GlobalTensor）：
-  https://asc.gitcode.com/guide/编程指南/编程模型/AI-Core-SIMD编程/基于Tensor的CPP编程/CPPTensor编程概述.html
-- 华为昇腾 · Ascend C 算子开发语言官方首页（CANN 算子开发语言）：
-  https://www.hiascend.com/cann/ascend-c
-- 华为昇腾 · CANN 社区版 Ascend C 算子开发指南（kernel 直调/内核直调流程）：
-  https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/81RC1alpha001/devguide/opdevg/ascendcopdevg/atlas_ascendc_10_0051.html
+- [华为昇腾 · Ascend C 编程模型概述](https://asc.gitcode.com/guide/编程指南/编程模型/编程模型概述.html)（AI Core 硬件基础、SIMD/SIMT、AI CPU）
+- [华为昇腾 · C++ Tensor 编程概述](https://asc.gitcode.com/guide/编程指南/编程模型/AI-Core-SIMD编程/基于Tensor的CPP编程/CPPTensor编程概述.html)（内存层级 GM→L1/L0 与 GM→UB、LocalTensor/GlobalTensor）
+- [华为昇腾 · Ascend C 算子开发语言官方首页](https://www.hiascend.com/cann/ascend-c)
+- [华为昇腾 · CANN 社区版 Ascend C 算子开发指南](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/81RC1alpha001/devguide/opdevg/ascendcopdevg/atlas_ascendc_10_0051.html)（kernel 直调/内核直调流程）
+
+---
+
+## 下一篇
+
+[02 · 存储层级与访问权域](/hardware/02-storage-hierarchy)——把本文的"货架"逐层拆开：每层多大、谁有权访问、为什么要显式管理。

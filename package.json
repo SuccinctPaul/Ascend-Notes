@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vocs dev",
-    "build": "vocs build",
+    "dev": "node scripts/dev-vite.mjs",
+    "check-mdx": "node scripts/check-mdx.mjs",
+    "build": "node scripts/check-mdx.mjs && vocs build",
     "preview": "vocs build && vocs preview"
   },
   "dependencies": {
