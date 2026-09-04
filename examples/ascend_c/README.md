@@ -123,7 +123,27 @@ cmake -S . -B build -DSOC_VERSION=Ascend910B2   # 默认值
 |---|---|
 | `op_kernel/gemm_kernel.cpp` | Ascend C kernel:朴素三重循环,fp16+fp32 累加,详细注释 |
 | `src/gemm_host.cpp` | host 驱动:ACL 初始化、H2D/D2H、调 `aclrtlaunch_gemm_kernel`、CPU 参考+校验 |
+| `op_kernel/softmax_kernel.cpp` + `src/softmax_host.cpp` | Softmax:逐行 3-pass(max/exp+sum/normalize),常数从 tiling DataCopy 取 |
+| `op_kernel/gelu_kernel.cpp`(+ v3/v5/v6/scalar 变体) | GELU:Vector tile 流水线版 + 各代踩坑诊断版 |
+| `op_kernel/rmsnorm_kernel.cpp` + `src/rmsnorm_host.cpp` | RMSNorm:2-pass(fp32 Σx² → TPipe UB 上的 Sqrt → 乘 inv_rms·gamma);常数经 tiling `GlobalTensor.GetValue` 标量读 |
+| `op_kernel/rope_kernel.cpp` + `src/rope_host.cpp` | RoPE:交错配对旋转,host 预计算 cos/sin 表 (fp16) 下发,kernel 查表逐对 fp32 乘加 |
 | `CMakeLists.txt` | 构建:引 `ascendc.cmake` → `ascendc_library STATIC` 自动编+打包 kernel,g++ 编 host |
+
+## 运行 (除 GEMM 外的算子)
+
+```bash
+cd build
+./ascend_softmax 16 512     # 行 softmax
+./ascend_rmsnorm 16 512     # RMSNorm (也试 128 4096)
+./ascend_rope 16 128        # RoPE (也试 256 128 / 1024 512)
+```
+
+> **RMSNorm 踩坑记录 (2026-09)**:① tiling 里的浮点常数若用
+> `DataCopy(Cl, Cg, 8)` + 裸 `LocalTensor.GetValue` 读取, 部分 kernel 会被
+> 优化丢弃, 改用 `GlobalTensor<float>.GetValue(i)` 标量读最稳;② Sqrt 的
+> 工作张量要用 `TPipe/TBuf` 分配真实 UB (裸 LocalTensor 无后备存储);
+> ③ host 端 tiling 赋值后别再跑清零循环覆盖 —— `cf[3]=1/D` 被抹零后
+> DF=0 → 输出全 0, 现象上极像 kernel/缓存问题, 排查半天实为两行 host 代码。
 
 ## 常见问题
 

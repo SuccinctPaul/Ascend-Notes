@@ -120,17 +120,17 @@ flowchart LR
 
 每个算子讲清楚：**数学定义 → 为什么需要 → 朴素实现 → NPU 关键优化点**。
 
-| 篇目 | 内容 |
-|---|---|
-| [01 · element-wise 与算子融合](/ops/01-elementwise-and-fusion) | 逐元素算子、Vector 单元、图算融合、epilogue 融合 |
-| [02 · RMSNorm](/ops/02-rmsnorm) | 均值归一化、Vector reduction、精度处理 |
-| [03 · Softmax](/ops/03-softmax) | 三阶段 reduction、数值稳定、UB 内完成 |
-| [04 · RoPE 旋转位置编码](/ops/04-rope) | 旋转矩阵、复数乘法、Vector 实现 |
-| [05 · GELU 与激活](/ops/05-gelu) | tanh 近似、逐元素、融合到 GEMM epilogue |
-| [06 · GQA 与 KV Cache](/ops/06-gqa-kvcache) | 分组注意力、KV Cache 管理 |
-| [07 · FlashAttention](/ops/07-flash-attention) | 分块注意力、IO 复杂度优化 |
-| [08 · 量化与反量化](/ops/08-quantization) | INT8/fp8 量化、Cube 翻倍算力 |
-| [09 · GEMM（四种 DSL 实证）](/ops/09-gemm) | 矩阵乘复用、tiling、Cube 16×16 MAC |
+| 篇目 | 内容 | 4 DSL 实现 |
+|---|---|---|
+| [01 · element-wise 与算子融合](/ops/01-elementwise-and-fusion) | 逐元素算子、Vector 单元、图算融合、epilogue 融合 | — |
+| [02 · RMSNorm](/ops/02-rmsnorm) | 均值归一化、Vector reduction、精度处理 | ✅ 2026-09 实测（见 §八） |
+| [03 · Softmax](/ops/03-softmax) | 三阶段 reduction、数值稳定、UB 内完成 | ✅ 实测（见 §八） |
+| [04 · RoPE 旋转位置编码](/ops/04-rope) | 旋转矩阵、复数乘法、Vector 实现 | ✅ 2026-09 实测（见 §八） |
+| [05 · GELU 与激活](/ops/05-gelu) | tanh 近似、逐元素、融合到 GEMM epilogue | ✅ 实测 |
+| [06 · GQA 与 KV Cache](/ops/06-gqa-kvcache) | 分组注意力、KV Cache 管理 | — |
+| [07 · FlashAttention](/ops/07-flash-attention) | 分块注意力、IO 复杂度优化 | — |
+| [08 · 量化与反量化](/ops/08-quantization) | INT8/fp8 量化、Cube 翻倍算力 | — |
+| [09 · GEMM（四种 DSL 实证）](/ops/09-gemm) | 矩阵乘复用、tiling、Cube 16×16 MAC | ✅ 实测 |
 
 ---
 

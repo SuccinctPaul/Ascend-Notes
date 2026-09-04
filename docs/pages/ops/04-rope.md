@@ -238,7 +238,76 @@ flowchart LR
 
 ---
 
-## 八、参考资料
+## 八、本仓库实现与实测（4 DSL，Ascend 910B2 / CANN 9.0.0，2026-09-05）
+
+### 8.1 四种 DSL 的实现说明
+
+配对约定：仓库统一**交错配对**（RoFormer 原版，`pair_a = (x[2a], x[2a+1])`），与本文 §4.1 的参考实现一致；θ_a = base^(-2a/d)，base=10000；cos/sin 表一律 host 预计算（§5.2）。
+
+| DSL | 文件 | 核心策略 |
+|---|---|---|
+| NumPy 基准 | `examples/python/src/rope.py` | `rope_reference`（查表版，fp32 中间量）+ θ/cos/sin 表预计算 + 复数视角说明 |
+| Triton-Ascend | `examples/triton_ascend/src/rope_triton.py` | **kernel 内用半维拆分布局**（前半/后半各一次连续 load，§5.3 对 Vector 成片访存最友好），wrapper 用 torch view 做 interleaved ↔ half-split 转换；`tables=` 接口接收预构建的 (cos, sin) NPU 张量 |
+| TileLang-Ascend | `examples/tilelang_ascend/src/rope_tilelang.py` | 2D kernel 一次 launch：`(cid, vid)` 双 Vector 核每核一个 token，`T.serial` 逐对旋转；fp16 标量算术被 aicore 禁止，故显式 `.astype("float32")` 做复数乘再 cast 回 |
+| Ascend C | `examples/ascend_c/op_kernel/rope_kernel.cpp` + `src/rope_host.cpp` | host 预计算 cos/sin 表（fp16, T×D/2）下发；单 block 逐对标量 fp32 乘加；q/k 一次 kernel 同时旋转 |
+
+踩坑记录：**triton-ascend 3.2.0 的 InterleaveOptimization pass 对 stride-2 访存（`2*idx`）会触发编译器断言崩溃**，这正是 kernel 内改用半维拆分布局的直接原因——也验证了 §5.3 说的"交错布局要在 kernel 里显式处理、与成片访存不对齐"。
+
+### 8.2 正确性实测（2026-09-05，`vllm-hust-cyj-21rc-cloud-container-86`）
+
+校验维度：① 与 NumPy 交错配对参考的 allclose；② **每对范数守恒**（旋转不改变 (x1,x2) 欧氏范数）。容差 `atol=1e-2, rtol=1e-2`。
+
+| 实现 | 用例 | 通过 | 最大误差 | 范数漂移 |
+|---|---|---|---|---|
+| NumPy 基准 | 保范数/相对位置性质/dtype + vs torch 复数乘 | 全过 | ≤ 1e-5 (fp32) | ≤ 1e-5 |
+| Triton-Ascend | 7 用例（fp16/fp32、HALF 非 BLOCK 倍数、4D、D=4096、T=2048 大位置） | **7/7** | ≤ **7.8e-3** | ≤ 5.1e-3 |
+| TileLang-Ascend | 6 用例（D=64/128/512/2048、2D 8×128、保范数） | **6/6** | ≤ **3.9e-3** | ≤ 2.1e-3 |
+| Ascend C | 16×128 / 256×128 / 1024×512 | **3/3** | **err=0**（全部） | ≤ 2.8e-3 |
+
+### 8.3 性能实测
+
+Triton-Ascend（fp16，BLOCK=256，**查表张量预构建复用**，20 轮取最快）：
+
+| T×D | 耗时 (ms) | 有效带宽 (GB/s) |
+|---|---|---|
+| 1024×128 | 0.487 | 1.6 |
+| 1024×2048 | 1.063 | 11.8 |
+| 4096×2048 | 3.469 | 14.5 |
+| 16384×128 | 1.981 | 6.4 |
+| 16384×2048 | **11.752** | **17.1** |
+
+**查表预构建的量化证据（§5.2 的活教材）**：同为 16384×2048，若每次调用都在 host 用 numpy 现算 cos/sin 表并 H2D，实测 **328.4 ms**；预构建后 **11.75 ms**——差 **28 倍**，全部花在 host 三角函数上。"预计算一张表、处处查表" 不是风格偏好，是数量级的差距。
+
+教学实现对照（非最优口径）：
+
+| 实现 | 规模 | 耗时 (ms) | 说明 |
+|---|---|---|---|
+| Ascend C 标量版（单 block 含同步粗测） | 16×128 | 0.73 | 逐对 GetValue/SetValue |
+| Ascend C 标量版 | 1024×512 | 37.6 | 单核标量地板 |
+| TileLang 教学版（per-row Python 循环） | 256×4096 | 10.7 | Python/launch 开销主导 |
+
+### 8.4 解读
+
+- RoPE 纯逐元素、无归约，理论算术强度 3 FLOP / 6 B（读 x + 读 cos/sin 表 + 写 y）= 0.5 FLOP/Byte，比 RMSNorm 还低，**100% memory-bound**。Triton 版 17 GB/s 距理论带宽很远，主要因为：① wrapper 的 interleaved ↔ half-split 转换多出 2-3 次 GM 往返（§5.3 两种布局不能兼得的实测代价）；② kernel 内每对两次分离的 store。若模型内部统一 half-split 布局（LLaMA 系就是），这些转换与额外流量全部消失——**布局约定要从模型层面统一，算子层面只能兜底**。
+- Ascend C 标量版 / TileLang per-row 循环为教学地板，仅验证语义。
+
+### 8.5 可重复执行命令
+
+```bash
+# 正确性
+cd examples/python && uv run python src/test_rope.py
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rope.py
+cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rope.py
+cd examples/ascend_c && ./build/ascend_rope 16 128
+
+# 性能
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_rope_triton.py
+cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_tilelang_ops.py
+```
+
+---
+
+## 九、参考资料
 
 - **RoPE / RoFormer 论文**（Jianlin Su et al., "RoFormer: Enhanced Transformer with Rotary Position Embedding", 2021）：
   https://arxiv.org/abs/2104.09864
