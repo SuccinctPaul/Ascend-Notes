@@ -128,6 +128,13 @@ flowchart LR
 ```
 ````
 
+注意：`npm run dev` 使用的是自定义启动脚本 `scripts/dev-vite.mjs`（而非 `vocs dev`），
+它注入了 `optimizeDeps: { include: ['mermaid'] }`。原因：vocs 客户端动态 `import('mermaid')`，
+而 rolldown-vite 对这条链不做运行时依赖预构建，mermaid 的 CJS 依赖 dayjs（只有 UMD 入口）
+会被原样发给浏览器，报 `does not provide an export named 'default'` 导致图不渲染。
+预构建后 dayjs 被转成 ESM 一并打包，问题消失。若未来 vocs 原生修复，可把 dev 脚本改回
+`vocs dev` 并删除该文件。
+
 ### Q: 如何修改 sidebar 导航？
 
 A: 编辑 `vocs.config.ts` 中的 `sidebar` 配置。
