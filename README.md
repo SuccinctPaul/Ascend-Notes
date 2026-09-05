@@ -72,6 +72,23 @@ examples/tilelang_ascend/ →  alloc_L1/L0C + T.copy + T.gemm_v0 + T.Scope("C") 
 - NPU:Ascend910B 系列
 - 所有 NPU kernel 在此服务器上构建与测试;`examples/python/` 基准可在任意机器跑。
 
+### 环境安装脚本(一键复现)
+
+`scripts/` 下提供两个安装脚本(目标机:Linux aarch64/x86_64,版本锁 = 上文实测组合):
+
+```bash
+# 1) NPU 工具链: 自动下载安装 CANN toolkit 9.0.0 并验证 (bisheng/acl/npu-smi);
+#    驱动/固件需登录昇腾官方渠道下载后用 --driver/--firmware 传入 (见脚本头部说明)
+sudo ./scripts/install_npu_toolchain.sh
+
+# 2) 四种 DSL 开发环境 (python 基准 / ascend_c / triton_ascend / tilelang_ascend)
+./scripts/install_dsl_envs.sh all     # 或单独: python | ascend_c | triton | tilelang | verify
+```
+
+脚本封装的版本锁:torch 2.8.0 + torch_npu 2.8.0rc1 + triton-ascend 3.2.0(含 CANN 9.0.0
+enum 补丁)+ tilelang-ascend v0.1.1.010 (cann900 wheel)。踩坑细节见各 DSL README 的
+"工具链安装"与"常见问题"章节。
+
 ### 运行前置(每次 shell 都要先 source)
 ```bash
 source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh

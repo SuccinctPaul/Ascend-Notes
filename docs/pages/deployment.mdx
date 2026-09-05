@@ -105,6 +105,10 @@ ascend-handbook/
 3. **Python 系 DSL**（python / triton_ascend / tilelang_ascend）：各自目录 `uv sync` 建 venv，torch / torch_npu / triton-ascend / tilelang-ascend 的版本锁见各目录 README 与 `pyproject.toml`。
 4. **C++ DSL**（ascend_c）：CMake + CANN 的 `ascendc.cmake` 框架，构建命令见 [Ascend C 手册 §3.4.5](/dsl/04-ascend-c)。
 
+> **一键安装**：以上环境可用 `scripts/` 下的脚本复现 ——
+> `sudo ./scripts/install_npu_toolchain.sh`（CANN toolkit 自动下载安装，驱动/固件可选）+
+> `./scripts/install_dsl_envs.sh all`（四种 DSL 环境，支持 `python | ascend_c | triton | tilelang | verify` 单独安装）。
+
 常见运行期故障（`E39007`、`rtSetDevice 507033`、HDC 链路 hang、`ACL_OP_INIT_MODE=1` 等）
 的排查清单见 [GELU 篇 §8.10](/ops/05-gelu) 的验证步骤与常见坑总表。
 
