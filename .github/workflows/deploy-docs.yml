@@ -34,8 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
+      # 走 npm run build (含 check-mdx.mjs 语法防线), 与本地构建命令一致
       - name: Build Vocs site
-        run: npx vocs build
+        run: npm run build
 
       # 把静态 HTML 产物 dist/public/ 打包成 Pages artifact
       - name: Upload Pages artifact
