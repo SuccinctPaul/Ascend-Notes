@@ -677,6 +677,8 @@ target_link_libraries(ascend_gemm PRIVATE gemm ascendcl runtime)
 
 #### 3.4.5 从零构建 + 运行(可整段复制)
 
+> 一键环境检查 + 试编译:`bash scripts/dsl/install_ascend_c.sh`(无需 NPU 设备,`verify` 仅验证)。
+
 ```bash
 cd examples/ascend_c
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release

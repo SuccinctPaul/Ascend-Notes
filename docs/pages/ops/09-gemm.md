@@ -170,7 +170,7 @@ Cube 的 MAC 阵列是 **16×16×16**：一次做 16×16 个 A×B，硬件一次
 
 ### 6.5 调用链与运行环境（README）
 
-- 所有 NPU kernel 跑在远程 `vllm-hust-cyj-21rc-cloud-piou`（aarch64 Ubuntu，CANN 9.0.0，Ascend910B）；
+- 所有 NPU kernel 跑在远程主测机 `vllm-hust-cyj-21rc-cloud-container-86`（aarch64 Ubuntu，CANN 9.0.0，Ascend910B；早期 GEMM 首跑于 `...-piou` 容器，环境相同）；
 - 每次 shell 先 `source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh`；
 - Ascend C 用 `ascendc.cmake` 自动完成 bisheng 编译 → host stub → 打包，host 端 `aclrtlaunch_gemm_kernel()` 异步启动（**异步提交**），要 `aclrtSynchronizeStream()` 才能安全读结果。
 

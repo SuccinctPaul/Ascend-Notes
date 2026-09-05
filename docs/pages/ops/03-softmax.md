@@ -264,7 +264,7 @@ flowchart LR
 3. **Ascend C 生产版 fp16** (`examples/ascend_c/op_kernel/softmax_kernel.cpp` — 3-pass 标量实现: row\_max / exp+sum 写回 / normalize；常数 `-1e20 / 0 / 1` 从 `GlobalTensor\<float\>` DataCopy 到 LocalTensor 取 GetValue，规避 CANN 9.0 SetValue(-inf) bug；Host 下发 `numBlocks=1` 保证云容器共享调度下 100% 覆盖所有行列).
 4. **Ascend C 标量地板版 fp16** (`examples/ascend_c/op_kernel/softmax_scalar_kernel.cpp` — 与生产版算法相同，额外在每个元素的比较 / 累加 / 缩放处注入一次 `LocalTensor SetValue + GetValue` round-trip 语义恒等式延迟，作为"纯标量无流水线"的性能地板参考).
 
-> **备注 (TileLang-Ascend)**: 代码实现已完成 (`examples/tilelang_ascend/src/softmax_tilelang.py`, 入口 `softmax_tilelang(x, BLOCK=256)`)，且本地 Python API smoke 测试通过（构造 kernel 对象 OK）。但在 CANN 9.0 aarch64 云容器环境中运行时，TileLang 的 `target detector` 因缺少 ascend backend registration plugin 抛错（与 GELU §8 TileLang 分支遇到的是同一个问题）。在云容器安装 `tilelang-ascend-0.1.1.010` CANN 9.0 aarch64 wheel 并执行 `pip install cython` 后，即可复现 TIR→Ascend IR→.so 的完整链路，届时把 `--run=tilelang` 加入 bench 命令即可自动追加列。当前 §8.4 性能表暂按 3 家 NPU fp16（Triton / Ascend C 生产 / Ascend C 标量）+ NumPy 列出。
+> **备注 (TileLang-Ascend)**: 代码实现已完成 (`examples/tilelang_ascend/src/softmax_tilelang.py`, 入口 `softmax_tilelang(x, BLOCK=256)`)，且本地 Python API smoke 测试通过（构造 kernel 对象 OK）。但在 CANN 9.0 aarch64 云容器环境中运行时，TileLang 的 `target detector` 因缺少 ascend backend registration plugin 抛错（与 GELU §8 TileLang 分支遇到的是同一个问题）。在云容器安装 `tilelang-ascend-0.1.1.010` CANN 9.0 aarch64 wheel 并执行 `pip install cython` 后，即可复现 TIR→Ascend IR→.so 的完整链路，届时把 `--run=tilelang` 加入 bench 命令即可自动追加列。当前 §8.4 性能表暂按 3 家 NPU fp16（Triton / Ascend C 生产 / Ascend C 标量）+ NumPy 列出。（**现行安装**:`bash scripts/dsl/install_tilelang.sh`,cann900 wheel 预编译含 cython 扩展,无需单独安装。）
 
 ### 8.1 四家 DSL 的实现代码说明
 
@@ -569,6 +569,10 @@ graph LR
 ### 8.6 可重复执行命令
 
 #### 8.6.1 正确性回归（4 家 smoke）
+
+> **环境注记 (2026-09-05)**:下述命令里的 `conda activate vllm-hust-dev` 是 2026-09-03 首测时的
+> 历史环境;现行环境由 `scripts/dsl/install_triton.sh` / `install_tilelang.sh` 建 **uv venv** 代替
+> —— 把 conda 两行换成对应 DSL 目录里的 `uv run python ...` 即可,其余不变。
 
 ```bash
 # (1) Python/NumPy 参考基线:

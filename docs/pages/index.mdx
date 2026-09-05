@@ -5,7 +5,19 @@
 从硬件架构到四种 DSL 开发，从 LLM 算子优化到 Profiling 实战——
 一份文档，帮你从零成长为专业的 NPU kernel 开发者。
 
-[从硬件架构开始](/hardware/01-ai-core-overview) · [四种 DSL 总览](/dsl/00-dsl-overview) · [术语表](/reference/context) · [GitHub](https://github.com/SuccinctPaul/ascend-handbook)
+[快速开始](/getting-started) · [从硬件架构开始](/hardware/01-ai-core-overview) · [四种 DSL 总览](/dsl/00-dsl-overview) · [术语表](/reference/context) · [GitHub](https://github.com/SuccinctPaul/ascend-handbook)
+
+---
+
+## 快速开始
+
+有 910B 机器在手?三条命令跑通第一个 NPU kernel(完整步骤见 [快速开始](/getting-started)):
+
+```bash
+sudo ./scripts/install_npu_toolchain.sh          # ① CANN 工具链
+./scripts/install_dsl_envs.sh all                # ② 四种 DSL 环境
+cd examples/python && uv run python src/gemm.py  # ③ 第一个 kernel(CPU 基准,NPU 版见快速开始)
+```
 
 ---
 
@@ -160,7 +172,8 @@ flowchart LR
 
 ## 运行环境
 
-远程服务器：`ssh vllm-hust-cyj-21rc-cloud-piou`，开发路径 `/root/Ascend-Notes`。
+远程服务器：`ssh vllm-hust-cyj-21rc-cloud-container-86`，开发路径 `/root/Ascend-Notes`
+（早期 GEMM 首跑在 `vllm-hust-cyj-21rc-cloud-piou` 容器，环境配置相同）。
 - 架构：aarch64 (Ubuntu)
 - CANN：9.0.0
 - NPU：Ascend910B 系列
@@ -172,6 +185,6 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 ```
 
 ```bash
-# 本地预览文档
-uv sync && uv run mkdocs serve
+# 本地预览文档 (Vocs, 详见 [构建与部署说明](/deployment))
+npm install --legacy-peer-deps && npm run dev
 ```

@@ -1,11 +1,35 @@
 # ascend-handbook
 
-**Ascend NPU 算子开发手册** —— 从硬件到前沿，从零到一。
+[![Docs](https://github.com/SuccinctPaul/ascend-handbook/actions/workflows/deploy-docs.yml/badge.svg)](https://succinctpaul.github.io/ascend-handbook/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![CANN 9.0.0 | Ascend 910B2](https://img.shields.io/badge/CANN_9.0.0-Ascend_910B2-red)
+![Python 3.11 | 3.12+](https://img.shields.io/badge/Python-3.11_=_3.12+-informational)
+
+**Ascend NPU 算子开发手册** —— 从硬件到前沿,从零到一。
 
 在 Ascend NPU 上,以 **GEMM (C = A×B)** 为案例,用 4 种不同 DSL 实现 kernel 并对比学习。
 每种 DSL 单独成目录,带详细中文注释与 README,讲述该 DSL 的工具链与运行方式。
 
-> 免责声明：本项目为个人学习笔记，与华为无隶属关系；Ascend 及相关名称为华为商标。
+> 免责声明:本项目为个人学习笔记,与华为无隶属关系;Ascend 及相关名称为华为商标。
+
+**[在线文档站](https://succinctpaul.github.io/ascend-handbook/)** · [快速开始](docs/pages/getting-started.mdx) · [参与贡献](CONTRIBUTING.md)
+
+## ⚡ 快速开始
+
+```bash
+git clone https://github.com/SuccinctPaul/ascend-handbook.git && cd ascend-handbook
+
+# 1) NPU 工具链: CANN 9.0.0 自动下载安装 (无 NPU 机器可跳过, python 基准照常可跑)
+sudo ./scripts/install_npu_toolchain.sh
+
+# 2) 四种 DSL 环境 (python 基准 / ascend_c / triton / tilelang), 结尾输出 OK/FAILED 汇总
+./scripts/install_dsl_envs.sh all
+
+# 3) 跑第一个 kernel
+cd examples/python && uv run python src/gemm.py    # CPU 基准; 四种 NPU 版跑法见 docs 快速开始
+```
+
+完整步骤(含驱动/固件、单 DSL 安装、预期输出)见 [快速开始](docs/pages/getting-started.mdx)。
 
 ## 四种 DSL 目录
 
@@ -151,3 +175,13 @@ node scripts/check-mdx.mjs
 ```
 
 推送 `main` 分支后 GitHub Actions 自动构建并发布到 GitHub Pages（见 `.github/workflows/deploy-docs.yml`）。
+
+## 贡献
+
+欢迎 Issue / PR!新增算子、修正文档、补充实测数据都受欢迎。提交前请读
+[CONTRIBUTING.md](CONTRIBUTING.md) —— 里面有新增算子的标准流程(基准先行、四 DSL 对齐、
+实测数据回填)、文档骨架规范与 MDX 注意事项。
+
+## License
+
+[MIT](LICENSE) © 2026 Paul Cheng。Ascend、CANN 及相关名称为华为商标,本项目与华为无隶属关系。

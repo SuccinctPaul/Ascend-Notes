@@ -35,6 +35,10 @@ export default defineConfig({
       link: '/',
     },
     {
+      text: '快速开始',
+      link: '/getting-started',
+    },
+    {
       text: '术语表',
       link: '/reference/context',
     },
