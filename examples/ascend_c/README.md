@@ -14,6 +14,9 @@ Ascend C 是华为 CANN 提供的**底层 kernel 编程 DSL**:用 C++ 写算子,
 
 ## 工具链
 
+> 环境检查 + 试编译一键脚本:`bash ../../scripts/dsl/install_ascend_c.sh`(无需 NPU 设备,`verify` 仅验证)。
+> NPU 工具链(CANN)本身用 `sudo bash scripts/install_npu_toolchain.sh` 安装。
+
 ```
 gemm_kernel.cpp  ──[ascendc.cmake 框架]──►  libgemm.a  (含 device 二进制 + host launch stub)
        │                    │                         │

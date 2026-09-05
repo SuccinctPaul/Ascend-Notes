@@ -24,6 +24,9 @@
 
 ## 工具链安装
 
+> 一键安装:`bash ../../scripts/dsl/install_triton.sh`(默认安装,`verify` 仅验证已装环境)。
+> 以下为手动步骤与原理。
+
 ### 前置:CANN 环境
 ```bash
 source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh

@@ -43,6 +43,8 @@
 
 ## 如何运行
 
+> 环境一键安装:`bash ../../scripts/dsl/install_python.sh`(`verify` 仅验证)。
+
 ```bash
 cd python
 uv sync                 # 安装依赖 (numpy, termcolor, pytest)

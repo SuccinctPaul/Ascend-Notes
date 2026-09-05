@@ -57,6 +57,11 @@ fail()  { printf '\033[1;31m[FAIL]\033[0m %s\n' "$*"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# 安装必须在 NPU 服务器 (Linux) 上; 仅下载允许在任意机器 (下载后 scp 到服务器)
+if [[ "$(uname -s)" != "Linux" && "$MODE" != "download" ]]; then
+  fail "本脚本需在 NPU 服务器 (Linux) 上执行安装; 如仅下载 .run 包请加 --download-only"
+fi
+
 # ---- 0. 基础依赖 -----------------------------------------------------------
 have curl || fail "缺少 curl, 请先安装 (apt-get install -y curl)"
 mkdir -p "$DOWNLOAD_DIR"

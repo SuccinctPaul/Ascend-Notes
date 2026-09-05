@@ -74,20 +74,31 @@ examples/tilelang_ascend/ →  alloc_L1/L0C + T.copy + T.gemm_v0 + T.Scope("C") 
 
 ### 环境安装脚本(一键复现)
 
-`scripts/` 下提供两个安装脚本(目标机:Linux aarch64/x86_64,版本锁 = 上文实测组合):
+版本锁 = 上文实测组合(torch 2.8.0 + torch_npu 2.8.0rc1 + triton-ascend 3.2.0 +
+tilelang-ascend v0.1.1.010)。目标机:Linux aarch64/x86_64 + Ascend NPU。
+脚本分两层:`scripts/dsl/` 下每种 DSL 一个独立 install/verify 脚本(可单独使用),
+`scripts/install_dsl_envs.sh` 是编排入口(依次转调各 DSL 脚本 + 工具链脚本)。
 
 ```bash
-# 1) NPU 工具链: 自动下载安装 CANN toolkit 9.0.0 并验证 (bisheng/acl/npu-smi);
+# 0) NPU 工具链: 自动下载安装 CANN toolkit 9.0.0 并验证 (bisheng/acl/npu-smi);
 #    驱动/固件需登录昇腾官方渠道下载后用 --driver/--firmware 传入 (见脚本头部说明)
 sudo ./scripts/install_npu_toolchain.sh
 
-# 2) 四种 DSL 开发环境 (python 基准 / ascend_c / triton_ascend / tilelang_ascend)
-./scripts/install_dsl_envs.sh all     # 或单独: python | ascend_c | triton | tilelang | verify
+# 1) 四种 DSL 一起装 (编排入口)
+./scripts/install_dsl_envs.sh all                  # 四种全装
+./scripts/install_dsl_envs.sh verify               # 只验证四个环境
+./scripts/install_dsl_envs.sh toolchain            # 转调 NPU 工具链 (可透传参数)
+./scripts/install_dsl_envs.sh all --with-toolchain # 新机器: 先装工具链再装 DSL
+
+# 2) 单独装/验证某一种 DSL (独立场景直接用对应脚本)
+./scripts/dsl/install_python.sh     [install|verify]   # NumPy 基准 (无 NPU 依赖)
+./scripts/dsl/install_ascend_c.sh   [install|verify]   # CANN 原生 C++
+./scripts/dsl/install_triton.sh     [install|verify]   # triton-ascend + torch_npu
+./scripts/dsl/install_tilelang.sh   [install|verify]   # tilelang-ascend + torch_npu
 ```
 
-脚本封装的版本锁:torch 2.8.0 + torch_npu 2.8.0rc1 + triton-ascend 3.2.0(含 CANN 9.0.0
-enum 补丁)+ tilelang-ascend v0.1.1.010 (cann900 wheel)。踩坑细节见各 DSL README 的
-"工具链安装"与"常见问题"章节。
+各脚本支持的版本覆盖变量(如 `TORCH_NPU_VERSION`、`TILELANG_WHEEL_URL`、`SKIP_BUILD`)
+见脚本头部注释;手动安装原理与踩坑细节见各 DSL README 的"工具链安装"与"常见问题"章节。
 
 ### 运行前置(每次 shell 都要先 source)
 ```bash
