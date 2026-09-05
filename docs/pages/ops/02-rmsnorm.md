@@ -240,7 +240,81 @@ flowchart LR
 
 ---
 
-## 八、参考资料
+## 八、本仓库实现与实测（4 DSL，Ascend 910B2 / CANN 9.0.0，2026-09-05）
+
+本节给出 RMSNorm 在仓库 4 种 DSL 下的实现要点与服务器实测数据；代码均在
+`examples/` 下，正确性与性能均为真实运行结果。
+
+### 8.1 四种 DSL 的实现说明
+
+| DSL | 文件 | 核心策略 |
+|---|---|---|
+| NumPy 基准 | `examples/python/src/rmsnorm.py` | `rmsnorm_reference`：Σx² 等归约全部 fp32，结果 cast 回 fp16；另有 `rmsnorm_naive`（fp16 归约）作误差对照 |
+| Triton-Ascend | `examples/triton_ascend/src/rmsnorm_triton.py` | 每 program 一行（grid-stride）；Pass A 逐 BLOCK_SIZE 子块 fp32 累加 Σx² → 标量 `inv_rms = 1/sqrt(Σx²/D+eps)` → Pass B `y = x·inv_rms·gamma`；**乘倒数**不做逐元素除 |
+| TileLang-Ascend | `examples/tilelang_ascend/src/rmsnorm_tilelang.py` | 2D kernel 一次 launch 处理所有行（双 Vector 核每核一行）：`T.tile.cast` fp16→fp32 → `T.tile.mul` 平方 → `T.reduce_sum` 归约 → `T.tile.rsqrt` → `T.tile.broadcast` → 两次 `T.tile.mul`。指令与本文 §5.2 的 Vector 指令表一一对应 |
+| Ascend C | `examples/ascend_c/op_kernel/rmsnorm_kernel.cpp` + `src/rmsnorm_host.cpp` | 单 block 逐元素标量 2-pass；fp32 寄存器累加 Σx²；Sqrt 在 `TPipe/TBuf` 分配的真实 UB 上执行；eps 与 D（浮点）从 tiling 经 `GlobalTensor.GetValue` 标量读入 |
+
+实现上踩过的坑（详见各目录 README / 常见问题）：
+
+- **aicore 内禁止整型变量→浮点 cast**：`1/D` 由 host 算好经 tiling 下发；
+- **fp16 标量算术被 aicore 拒绝**（TileLang RoPE 遇到，RMSNorm 同理）：中间量显式升 fp32；
+- **裸 `LocalTensor<T>{} + SetSize` 没有真实 UB 后备**：Sqrt 结果不可靠，须用 `TPipe/TBuf`；
+- **host 端 tiling 赋值后被清零循环覆盖**：`cf[3]` 抹零 → 除以 0 → 输出全 0，现象上极像 kernel/缓存问题。
+
+### 8.2 正确性实测（2026-09-05，`vllm-hust-cyj-21rc-cloud-container-86`）
+
+Ground truth 统一为 NumPy fp32 归约版；容差按仓库惯例 `allclose(atol=1e-2, rtol=1e-2)`（fp16 输出在大 |y| 处 1 ulp ≈ |y|/1024，固定绝对容差过紧）。
+
+| 实现 | 用例 | 通过 | 最大误差 | 附加校验 |
+|---|---|---|---|---|
+| NumPy 基准 | 单位均方/缩放不变/dtype/长行 fp16 累加对照 | 全过 | vs torch ≤ 1e-5 (fp32) | fp16 归约 max_err=3.4e-3 (d=8192, 教学对照) |
+| Triton-Ascend | 8 用例（fp16/fp32、odd-D、4D、D>BLOCK、128×4096、1024×768） | **8/8** | ≤ **1.95e-3**（fp32 用例 9.5e-7） | mean-square(y/gamma)≈1, err ≤ 1.2e-4 |
+| TileLang-Ascend | 5 用例（D=128/512/1024/4096 + 2D 8×512） | **5/5** | ≤ **1.56e-2**（≈4 ulp fp16 @ \|y\|≈4） | 同上 |
+| Ascend C | 16×512 / 256×512 / 1024×4096 | **3/3** | 16×512 **err=0**；1024×4096 2.0e-3 | energy err ≤ 8.2e-5 |
+
+### 8.3 性能实测
+
+Triton-Ascend（fp16，BLOCK=1024，20 轮取最快）：
+
+| M×D | 耗时 (ms) | 有效带宽 (GB/s) |
+|---|---|---|
+| 1024×512 | 0.243 | 8.6 |
+| 1024×4096 | 0.234 | 71.8 |
+| 4096×4096 | 0.442 | 151.8 |
+| 16384×512 | 1.202 | 27.9 |
+| 16384×4096 | **1.261** | **212.9** |
+
+教学实现对照（同规模非最优口径，仅作量级参考）：
+
+| 实现 | 规模 | 耗时 (ms) | 说明 |
+|---|---|---|---|
+| Ascend C 标量版（单 block 含同步粗测） | 16×512 | 0.90 | 逐元素 GetValue/SetValue，教学地板 |
+| Ascend C 标量版 | 1024×4096 | 110.3 | 单核标量无法吃满多核，量级参考 |
+| TileLang 教学版（per-row Python 循环） | 256×4096 | 1.95 | Python/launch 开销主导 |
+
+### 8.4 解读
+
+- RMSNorm 是典型 **memory-bound**：算术强度 ≈ 6 FLOP / 4 B = 1.5 FLOP/Byte，远低于 910B2 的 ridge 点（≈175）。Triton 版最大档位测得 213 GB/s，距 1600 GB/s 的 HBM 理论值还有 ~7 倍——主要开销在逐行两趟 GM 访问（Pass A 读一遍 + Pass B 再读一遍）与每行一次的标量 rsqrt 同步；融合进后续 GEMM（§5.6）才是工程正解。
+- Ascend C 标量版是**性能地板**（教学用）：单 block 逐元素 GM 往返，仅用于验证语义与展示优化空间。
+- TileLang 教学版的 per-row Python 循环让 launch 开销主导，数据反映教学实现的真实成本。
+
+### 8.5 可重复执行命令
+
+```bash
+# 正确性
+cd examples/python && uv run python src/test_rmsnorm.py
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rmsnorm.py
+cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rmsnorm.py
+cd examples/ascend_c && ./build/ascend_rmsnorm 16 512
+
+# 性能
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_rmsnorm_triton.py
+cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_tilelang_ops.py
+```
+
+---
+
+## 九、参考资料
 
 - **RMSNorm 论文**（Biao Zhang, Rico Sennrich, "Root Mean Square Layer Normalization", NeurIPS 2019）：
   https://arxiv.org/abs/1910.07467

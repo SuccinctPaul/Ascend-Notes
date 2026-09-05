@@ -593,9 +593,13 @@ GELU 完全是 element-wise，**每元素读 2 字节 + 写 2 字节 + 很少的
 
 ### 8.9 可重复执行命令 (基准 4 家 + TileLang 可选)
 
+> **环境注记 (2026-09-05)**:下述命令里的 `conda activate vllm-hust-dev` 是 2026-09-03 首测时的
+> 历史环境;现行环境由 `scripts/dsl/install_triton.sh` 等脚本建 **uv venv** 代替 —— 把 conda
+> 两行换成对应 DSL 目录里的 `uv run python ...` 即可,其余参数不变。
+
 ```bash
 # 在任意包含 ascend-toolkit CANN 9 + conda env vllm-hust-dev + 910B NPU 的 host 上:
-cd Ascend-Notes/
+cd ascend-handbook/
 bash -lc "source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
   source /root/miniconda3/etc/profile.d/conda.sh && conda activate vllm-hust-dev && \
   python3 examples/bench_gelu.py --run=numpy,triton,ascendc --which=both --repeats=15 \
@@ -617,6 +621,12 @@ HDC / CANN 运行时正常后，把 `--run=...` 加上 `,tilelang` 即可自动�
 
 #### 8.10.1 环境清单
 
+> **安装方式注记 (2026-09-05)**:下表为 2026-09-03 首次跑通时的历史记录(当时 wheel 命名为
+> `tilelang_ascend-0.1.1.010-...`、需手动 `pip install cython`)。**现行安装**:
+> `bash scripts/dsl/install_tilelang.sh` —— wheel 已更名为
+> `tilelang-0.1.1.10+ubuntu.20.4.cann900-cp311-cp311-linux_aarch64.whl`(以 `tilelang` 包名发布,
+> 预编译含 cython 扩展,无需单独装 cython),并自动补齐 `pyyaml decorator attrs psutil scipy` 运行时依赖。
+
 | 组件                    | 目标版本 / 命令                                                                                                       | 我们实测值                                         |
 | --------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | CANN Toolkit          | `source /usr/local/Ascend/ascend-toolkit/set_env.sh` 后 `ascend-info`                                            | 9.0.0                                         |
@@ -630,7 +640,7 @@ HDC / CANN 运行时正常后，把 `--run=...` 加上 `,tilelang` 即可自动�
 
 ```bash
 #!/bin/bash
-# scripts/diagnose_tilelang_ascend.sh（示意脚本，可直接复制到容器执行） — 输出 PASS/FAIL 6 项, 定位 §8.10.4 常见坑 ID
+# 示意脚本（仓库未收录，可直接复制到容器执行） — 输出 PASS/FAIL 6 项, 定位 §8.10.4 常见坑 ID
 set -u
 : "${CANN_HOME:=/usr/local/Ascend/ascend-toolkit}"
 PASS=0; FAIL=0
@@ -695,7 +705,7 @@ echo "=== Summary: PASS=$PASS FAIL=$FAIL ==="
 
 ```bash
 # 1) 最小编译冒烟 (不依赖 CANN 运行时 rtSetDevice / HDC: 只做 TIR→IR→.so)
-cd Ascend-Notes/examples/tilelang_ascend/src
+cd ascend-handbook/examples/tilelang_ascend/src
 env ACL_OP_INIT_MODE=1 python3 -u gelu_tilelang.py --compile-only
 # 期望输出:
 #   [compile-only] N=1024   N_pad=1024   compiled → JITKernel OK
@@ -708,7 +718,7 @@ env ACL_OP_INIT_MODE=1 python3 -u gelu_tilelang.py
 # 期望: 3 行 (1024/4096/65536) max_abs_err < 5e-3 → PASS.
 
 # 3) 集成进 Roofline 基准:
-cd Ascend-Notes/
+cd ascend-handbook/
 python3 examples/bench_gelu.py \
     --run=tilelang,triton,ascendc,numpy --which=both --repeats=15 \
     --sizes=65536,524288,1048576,8388608,33554432,67108864,134217728 \

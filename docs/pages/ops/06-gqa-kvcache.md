@@ -238,7 +238,64 @@ flowchart LR
 
 ---
 
-## 八、参考资料
+## 八、本仓库实现与实测（4 DSL，Ascend 910B2 / CANN 9.0.0，2026-09-05）
+
+### 8.1 四种 DSL 的实现说明
+
+实现口径：**解码一步**的 GQA 注意力 —— q (Hq,D) 对 KV Cache (Hkv,S,D) 打分+加权，
+分组 `kv = hq // (Hq/Hkv)`，覆盖 GQA 中间态与 MQA/MHA 退化：
+
+| DSL | 文件 | 核心策略 |
+|---|---|---|
+| NumPy 基准 | `examples/python/src/gqa.py` | `gqa_decode_reference`：einsum 打分 + 数值稳定 softmax + 加权，全 fp32 |
+| Triton-Ascend | `examples/triton_ascend/src/gqa_triton.py` | 每 program 一个 query 头，**在线 softmax（flash-decode）单趟扫 cache**：分块 m/l/acc 增量，S 维分数不物化 |
+| TileLang-Ascend | `examples/tilelang_ascend/src/gqa_tilelang.py` | 每 program 一头，逐 s 串行在线 softmax（(1,1) 原位 max/add，分数不物化），教学地板 |
+| Ascend C | `examples/ascend_c/op_kernel/gqa_kernel.cpp` + `src/gqa_host.cpp` | 单 block 标量 3-pass：打分→scratch，exp→求和，加权→归一化 |
+
+### 8.2 正确性实测（2026-09-05，`vllm-hust-cyj-21rc-cloud-container-86`）
+
+| 实现 | 用例 | 通过 | 最大误差 |
+|---|---|---|---|
+| NumPy 基准 | MHA/MQA/GQA 退化一致性 | 全过 | ≤ 1e-2 ✓ |
+| Triton-Ascend | 6 用例（GQA/MQA/MHA、S 非 BLOCK 倍数、S=1024、LLaMA-7B 8×8 配置） | **6/6** | ≤ **1.2e-4** |
+| TileLang-Ascend | 4 用例（GQA/MQA/MHA 退化小档位） | **4/4** | ≤ 6e-5（多数 0） |
+| Ascend C | 8/2/256/128 | **PASS** | 2.0e-3 |
+
+### 8.3 性能实测（Triton，fp16，BLOCK_S=128，20 轮取最快）
+
+| Hq/Hkv | S | D | 耗时 (ms) | KV 读取带宽 (GB/s) |
+|---|---|---|---|---|
+| 8/8 (7B MHA) | 1024 | 128 | 0.196 | 21.4 |
+| 32/8 (7B GQA) | 1024 | 128 | 0.191 | 22.0 |
+| 32/8 (7B GQA) | 4096 | 128 | 0.274 | 61.2 |
+| 32/8 (7B GQA) | 8192 | 128 | 0.363 | **92.4** |
+| 8/1 (MQA) | 4096 | 64 | 0.250 | 4.2 |
+
+Ascend C 标量版对照：8/2/256/128 ≈ 29.4 ms、8/8/1024/128 ≈ 115.6 ms（单 block 教学地板）。
+
+### 8.4 解读
+
+- 解码注意力 ~ 完全带宽受限（读一遍 KV cache），且随上下文变长**每毫秒能搬的字节越多**：
+  S 从 1K 到 8K，有效带宽 22 → 92 GB/s（固定开销被更长的 KV 流摊薄）。
+- 每个 query 头一个 program 的并行度上限是 Hq（≤32），核心占用率低——这正是
+  flash-decode 做 **split-K / 多 query 合并** 的动机（docs/07 §5）：把 S 维也切给更多核心。
+- GQA 的收益直接体现在字节数上：32/8 配置的 KV 读取量是 MHA 的 1/4 ——
+  §三 的"省显存"在同一份 kernel 上就是"省带宽"。
+- TileLang/Ascend C 教学版为语义验证地板。
+
+### 8.5 可重复执行命令
+
+```bash
+cd examples/python && uv run python src/test_gqa.py 2>/dev/null; uv run python src/gqa.py
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_gqa.py
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/bench_gqa_triton.py
+cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_gqa.py
+cd examples/ascend_c && ./build/ascend_gqa 8 2 256 128
+```
+
+---
+
+## 九、参考资料
 
 - **GQA 论文**（Joshua Ainslie et al., "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head and Checkpointed Models", EMNLP 2023）：
   https://arxiv.org/abs/2305.13245

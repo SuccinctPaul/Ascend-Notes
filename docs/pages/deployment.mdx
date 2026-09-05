@@ -52,7 +52,7 @@ npm run build
 
 ### 3.2 自动部署
 
-仓库已配置 [GitHub Actions workflow](https://github.com/SuccinctPaul/Ascend-Notes/blob/main/.github/workflows/deploy-docs.yml)，
+仓库已配置 [GitHub Actions workflow](https://github.com/SuccinctPaul/ascend-handbook/blob/main/.github/workflows/deploy-docs.yml)，
 每次 push 到 `main` 分支会自动：
 
 1. 安装 Node.js 22 + npm 依赖
@@ -62,10 +62,10 @@ npm run build
 
 部署完成后，站点地址为：
 ```
-https://succinctpaul.github.io/Ascend-Notes/
+https://succinctpaul.github.io/ascend-handbook/
 ```
 
-> **注意**：`vocs.config.ts` 中的 `basePath: '/Ascend-Notes'` 必须与你的仓库名一致。
+> **注意**：`vocs.config.ts` 中的 `basePath: '/ascend-handbook'` 必须与你的仓库名一致。
 > 如果你把仓库改名为 `my-docs`，`basePath` 也要改成 `'/my-docs'`。
 
 ### 3.3 手动触发部署
@@ -75,7 +75,7 @@ https://succinctpaul.github.io/Ascend-Notes/
 ## 4. 项目结构
 
 ```
-Ascend-Notes/
+ascend-handbook/
 ├── .github/workflows/deploy-docs.yml   # GitHub Actions 部署脚本
 ├── docs/                                # Vocs srcDir（vocs.config.ts: srcDir: 'docs'）
 │   ├── pages/                           # 文档页面（文件路由）
@@ -88,22 +88,30 @@ Ascend-Notes/
 │   │   └── deployment.mdx              # 本文件
 ├── public/                              # 静态资源（图片等，Vocs 约定在项目根）
 ├── examples/                            # 四种 DSL 的可运行 kernel 与基准脚本
-├── scripts/                             # check-mdx.mjs 等构建辅助脚本
+├── scripts/                             # check-mdx.mjs 等构建辅助脚本 + install_npu_toolchain / dsl/ 环境安装脚本
 ├── vocs.config.ts                       # Vocs 配置（sidebar、socials、editLink 等）
 ├── package.json                         # npm 依赖与脚本
 └── .gitignore
 ```
 
-> 图片等静态资源放在项目根的 `public/`（Vocs 约定位置），Markdown 里用站点绝对路径引用（如 `/Ascend-Notes/cube-unit-16x16.png`，前缀是 `basePath`）。
+> 图片等静态资源放在项目根的 `public/`（Vocs 约定位置），Markdown 里用站点绝对路径引用（如 `/ascend-handbook/cube-unit-16x16.png`，前缀是 `basePath`）。
 
 ## 5. NPU 开发环境（算子开发侧）
 
-本页上面讲的是"文档站"的构建部署；要**跑 `examples/` 里的 NPU kernel**，需要的是另一套环境：
+本页上面讲的是"文档站"的构建部署；要**跑 `examples/` 里的 NPU kernel**，需要的是另一套环境
+（从零安装的完整步骤见[快速开始](/getting-started)）：
 
 1. **硬件**：Ascend 910B 系列 NPU（仓库实测 Ascend 910B2）。
 2. **驱动与 CANN**：CANN 9.0.0（每个 shell 先 `source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh`）。
 3. **Python 系 DSL**（python / triton_ascend / tilelang_ascend）：各自目录 `uv sync` 建 venv，torch / torch_npu / triton-ascend / tilelang-ascend 的版本锁见各目录 README 与 `pyproject.toml`。
 4. **C++ DSL**（ascend_c）：CMake + CANN 的 `ascendc.cmake` 框架，构建命令见 [Ascend C 手册 §3.4.5](/dsl/04-ascend-c)。
+
+> **一键安装**：环境可用 `scripts/` 下的脚本复现，分两层 ——
+> 工具链 `sudo ./scripts/install_npu_toolchain.sh`（CANN toolkit 自动下载安装，驱动/固件可选）；
+> DSL 环境每种类一个独立脚本（`scripts/dsl/install_python.sh` / `install_ascend_c.sh` /
+> `install_triton.sh` / `install_tilelang.sh`，均支持 `install|verify` 子命令），既可用
+> `./scripts/install_dsl_envs.sh all` 一起装（`verify` 只验证、`toolchain` 转调工具链、
+> `--with-toolchain` 新机器一把梭），也可单独执行某一种。
 
 常见运行期故障（`E39007`、`rtSetDevice 507033`、HDC 链路 hang、`ACL_OP_INIT_MODE=1` 等）
 的排查清单见 [GELU 篇 §8.10](/ops/05-gelu) 的验证步骤与常见坑总表。

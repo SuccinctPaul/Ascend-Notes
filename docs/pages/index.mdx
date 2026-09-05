@@ -1,11 +1,23 @@
-# Ascend NPU 知识库
+# Ascend NPU 算子开发手册
 
-**面向 0→1 新手的昇腾 Ascend NPU 核心开发手册**
+**面向 0→1 的昇腾 Ascend NPU 核心开发手册（原 ascend-notes）**
 
 从硬件架构到四种 DSL 开发，从 LLM 算子优化到 Profiling 实战——
 一份文档，帮你从零成长为专业的 NPU kernel 开发者。
 
-[从硬件架构开始](/hardware/01-ai-core-overview) · [四种 DSL 总览](/dsl/00-dsl-overview) · [术语表](/reference/context) · [GitHub](https://github.com/SuccinctPaul/Ascend-Notes)
+[快速开始](/getting-started) · [从硬件架构开始](/hardware/01-ai-core-overview) · [四种 DSL 总览](/dsl/00-dsl-overview) · [术语表](/reference/context) · [GitHub](https://github.com/SuccinctPaul/ascend-handbook)
+
+---
+
+## 快速开始
+
+有 910B 机器在手?三条命令跑通第一个 NPU kernel(完整步骤见 [快速开始](/getting-started)):
+
+```bash
+sudo ./scripts/install_npu_toolchain.sh          # ① CANN 工具链
+./scripts/install_dsl_envs.sh all                # ② 四种 DSL 环境
+cd examples/python && uv run python src/gemm.py  # ③ 第一个 kernel(CPU 基准,NPU 版见快速开始)
+```
 
 ---
 
@@ -120,17 +132,17 @@ flowchart LR
 
 每个算子讲清楚：**数学定义 → 为什么需要 → 朴素实现 → NPU 关键优化点**。
 
-| 篇目 | 内容 |
-|---|---|
-| [01 · element-wise 与算子融合](/ops/01-elementwise-and-fusion) | 逐元素算子、Vector 单元、图算融合、epilogue 融合 |
-| [02 · RMSNorm](/ops/02-rmsnorm) | 均值归一化、Vector reduction、精度处理 |
-| [03 · Softmax](/ops/03-softmax) | 三阶段 reduction、数值稳定、UB 内完成 |
-| [04 · RoPE 旋转位置编码](/ops/04-rope) | 旋转矩阵、复数乘法、Vector 实现 |
-| [05 · GELU 与激活](/ops/05-gelu) | tanh 近似、逐元素、融合到 GEMM epilogue |
-| [06 · GQA 与 KV Cache](/ops/06-gqa-kvcache) | 分组注意力、KV Cache 管理 |
-| [07 · FlashAttention](/ops/07-flash-attention) | 分块注意力、IO 复杂度优化 |
-| [08 · 量化与反量化](/ops/08-quantization) | INT8/fp8 量化、Cube 翻倍算力 |
-| [09 · GEMM（四种 DSL 实证）](/ops/09-gemm) | 矩阵乘复用、tiling、Cube 16×16 MAC |
+| 篇目 | 内容 | 4 DSL 实现 |
+|---|---|---|
+| [01 · element-wise 与算子融合](/ops/01-elementwise-and-fusion) | 逐元素算子、Vector 单元、图算融合、epilogue 融合 | — |
+| [02 · RMSNorm](/ops/02-rmsnorm) | 均值归一化、Vector reduction、精度处理 | ✅ 2026-09 实测（见 §八） |
+| [03 · Softmax](/ops/03-softmax) | 三阶段 reduction、数值稳定、UB 内完成 | ✅ 实测（见 §八） |
+| [04 · RoPE 旋转位置编码](/ops/04-rope) | 旋转矩阵、复数乘法、Vector 实现 | ✅ 2026-09 实测（见 §八） |
+| [05 · GELU 与激活](/ops/05-gelu) | tanh 近似、逐元素、融合到 GEMM epilogue | ✅ 实测 |
+| [06 · GQA 与 KV Cache](/ops/06-gqa-kvcache) | 分组注意力、KV Cache 管理 | ✅ 2026-09 实测（见 §八） |
+| [07 · FlashAttention](/ops/07-flash-attention) | 分块注意力、IO 复杂度优化 | ✅ 2026-09 实测（见 §八） |
+| [08 · 量化与反量化](/ops/08-quantization) | INT8/fp8 量化、Cube 翻倍算力 | ✅ 2026-09 实测（见 §八） |
+| [09 · GEMM（四种 DSL 实证）](/ops/09-gemm) | 矩阵乘复用、tiling、Cube 16×16 MAC | ✅ 实测 |
 
 ---
 
@@ -160,7 +172,8 @@ flowchart LR
 
 ## 运行环境
 
-远程服务器：`ssh vllm-hust-cyj-21rc-cloud-piou`，开发路径 `/root/Ascend-Notes`。
+远程服务器：`ssh vllm-hust-cyj-21rc-cloud-container-86`，开发路径 `/root/Ascend-Notes`
+（早期 GEMM 首跑在 `vllm-hust-cyj-21rc-cloud-piou` 容器，环境配置相同）。
 - 架构：aarch64 (Ubuntu)
 - CANN：9.0.0
 - NPU：Ascend910B 系列
@@ -172,6 +185,6 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 ```
 
 ```bash
-# 本地预览文档
-uv sync && uv run mkdocs serve
+# 本地预览文档 (Vocs, 详见 [构建与部署说明](/deployment))
+npm install --legacy-peer-deps && npm run dev
 ```

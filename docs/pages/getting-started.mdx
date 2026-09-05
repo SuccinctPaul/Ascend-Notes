@@ -1,0 +1,123 @@
+---
+title: 快速开始
+---
+
+# 快速开始:从零到第一个 NPU kernel
+
+本页带你用 **3 条命令** 完成 NPU 工具链与四种 DSL 环境安装,并跑通第一个 GEMM kernel。
+全程约 10–20 分钟(取决于下载速度)。所有安装逻辑封装在 `scripts/` 下,可重复执行、幂等。
+
+---
+
+## 0. 前置条件
+
+| 项目 | 要求 | 说明 |
+|---|---|---|
+| 硬件 | Ascend 910B 系列 NPU | 仓库实测 Ascend 910B2;无 NPU 时可跑 python 基准与 ascend_c 编译 |
+| 系统 | Linux,aarch64 或 x86_64 | Ubuntu 实测;云容器亦可用(驱动在宿主机) |
+| 账号 | 安装 CANN 时需 root(sudo) | 非 root 装 CANN 会落到 `$HOME/Ascend` |
+| 网络 | 可访问 GitHub / PyPI / 昇腾镜像 | 离线场景见各脚本 `--help` 与 FAQ |
+
+> 已有装好 CANN 的机器?跳过 Step 1,直接从 Step 2 开始(脚本会自动检测并复用已有 CANN)。
+
+---
+
+## 1. 安装 NPU 工具链(CANN)
+
+```bash
+git clone https://github.com/SuccinctPaul/ascend-handbook.git
+cd ascend-handbook
+
+# 自动下载并安装 CANN toolkit 9.0.0 + 验证 bisheng/acl/npu-smi
+sudo ./scripts/install_npu_toolchain.sh
+
+# 每次 shell 都要先 source(脚本会自动追加到 ~/.bashrc)
+source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
+```
+
+变体场景:
+
+```bash
+./scripts/install_npu_toolchain.sh --download-only          # 只下载 .run 包(可跨机下载后转存)
+sudo ./scripts/install_npu_toolchain.sh \
+     --driver <driver.run> --firmware <firmware.run>        # 物理机补装驱动/固件(官方渠道下载)
+CANN_VERSION=9.0.0 sudo -E ./scripts/install_npu_toolchain.sh   # 覆盖 CANN 版本
+```
+
+验证:`npu-smi info` 能看到 910B 卡、`echo $ASCEND_HOME_PATH` 非空即 OK。
+物理机无驱动?装完 CANN 也能编译 kernel,但跑不了 NPU 用例 —— 详见 [构建与部署说明 §5](/deployment)。
+
+---
+
+## 2. 安装四种 DSL 开发环境
+
+```bash
+# 一键装全四种(python 基准 / ascend_c / triton / tilelang),结尾输出 OK/FAILED 汇总
+./scripts/install_dsl_envs.sh all
+
+# 或只验证(不安装)
+./scripts/install_dsl_envs.sh verify
+
+# 或单独装某一种(每种 DSL 独立脚本,支持 install|verify 子命令)
+./scripts/dsl/install_python.sh            # NumPy 基准,任意机器可跑
+./scripts/dsl/install_triton.sh            # triton-ascend + torch_npu(需 Linux + CANN)
+./scripts/dsl/install_tilelang.sh          # tilelang-ascend + torch_npu
+./scripts/dsl/install_ascend_c.sh          # 工具链检查 + 试编译(无需 NPU 设备)
+```
+
+新机器一把梭(以 root 直接登录服务器时,一步完成工具链 + 四种 DSL):
+
+```bash
+./scripts/install_dsl_envs.sh all --with-toolchain
+# 非 root 用户请分两步: sudo ./scripts/install_npu_toolchain.sh && ./scripts/install_dsl_envs.sh all
+```
+
+> 脚本封装的版本锁 = 实测可用组合:**CANN 9.0.0 + torch 2.8.0 + torch_npu 2.8.0rc1 +
+> triton-ascend 3.2.0 + tilelang-ascend v0.1.1.010**。改动安装步骤时请同步
+> `scripts/dsl/`、各 DSL README 与 [DSL 手册](/dsl/00-dsl-overview) 三处。
+
+---
+
+## 3. 跑第一个 GEMM(C = A @ B)
+
+四种 DSL 实现同一个 GEMM,各自输出正确性校验 `PASS`:
+
+```bash
+# ① Python/NumPy 基准(CPU,任意机器)
+cd examples/python && uv run python src/gemm.py
+
+# ② Ascend C(需 CANN;build 产物在 examples/ascend_c/build/)
+cd ../ascend_c && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+./build/ascend_gemm
+
+# ③ Triton on Ascend(需 NPU;ASCEND_RT_VISIBLE_DEVICES 选一张空闲卡)
+cd ../triton_ascend && ASCEND_RT_VISIBLE_DEVICES=0 uv run python src/test_gemm.py
+
+# ④ TileLang on Ascend(ACL_OP_INIT_MODE=1 规避 TVM FFI 冲突,必须带)
+cd ../tilelang_ascend && ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=0 uv run python src/test_gemm.py
+```
+
+预期输出(各 DSL 均含 `PASS`):
+
+```
+ascend_c GEMM: PASS (max_abs_error=0, M=N=K=128, dtype=fp16)
+All N cases PASSED            # triton / tilelang 的 test_gemm.py, N=用例数
+```
+
+跑通 8 个算子的全部用例与性能基准,见根 [README「如何逐个运行」](https://github.com/SuccinctPaul/ascend-handbook#如何逐个运行)。
+
+---
+
+## 4. 下一步
+
+- **读不懂 kernel?** 按 [学习路径](/) 走:先 [AI Core 硬件模型](/hardware/01-ai-core-overview),
+  再 [四种 DSL 总览](/dsl/00-dsl-overview),然后挑一种 DSL 深入 —— 推荐从
+  [Triton](/dsl/02-triton-ascend) 开始(门槛最低的 NPU kernel 路径)。
+- **想看真实性能?** [四种 DSL 实测解读](/perf/05-dsl-benchmark-analysis) 与
+  [GEMM 128³ Roofline 实战](/perf/06-roofline-case-study)。
+- **想写 LLM 算子?** 直接进 [第 04 卷 · LLM 优化算子](/ops/01-elementwise-and-fusion):
+  RMSNorm / RoPE / GQA / FlashAttention / 量化,每个算子四种 DSL 全实现。
+- **遇到报错?** 各 DSL 手册末尾都有 FAQ + 常见坑总表([Triton](/dsl/02-triton-ascend) /
+  [TileLang](/dsl/03-tilelang-ascend) / [Ascend C](/dsl/04-ascend-c)),
+  GELU 篇 §8.10 有运行期故障排查清单([E39007 等](/ops/05-gelu))。
+- **想贡献?** 见 [CONTRIBUTING.md](https://github.com/SuccinctPaul/ascend-handbook/blob/main/CONTRIBUTING.md)。

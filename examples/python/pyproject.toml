@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "logging>=0.4.9.6",
+    # 注意: 不要添加 "logging" —— 它是 stdlib 内置模块, PyPI 上的 logging 包是
+    # Python 2 时代的古董, 在 py3 上无法构建 (2026-09 在服务器实测踩坑)。
     "numpy>=2.5.1",
     "termcolor>=3.3.0",
+    "pytest>=8.0",
 ]

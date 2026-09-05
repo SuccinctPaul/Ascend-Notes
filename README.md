@@ -1,7 +1,35 @@
-# Ascend-Notes
+# ascend-handbook
+
+[![Docs](https://github.com/SuccinctPaul/ascend-handbook/actions/workflows/deploy-docs.yml/badge.svg)](https://succinctpaul.github.io/ascend-handbook/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![CANN 9.0.0 | Ascend 910B2](https://img.shields.io/badge/CANN_9.0.0-Ascend_910B2-red)
+![Python 3.11 | 3.12+](https://img.shields.io/badge/Python-3.11_=_3.12+-informational)
+
+**Ascend NPU 算子开发手册** —— 从硬件到前沿,从零到一。
 
 在 Ascend NPU 上,以 **GEMM (C = A×B)** 为案例,用 4 种不同 DSL 实现 kernel 并对比学习。
 每种 DSL 单独成目录,带详细中文注释与 README,讲述该 DSL 的工具链与运行方式。
+
+> 免责声明:本项目为个人学习笔记,与华为无隶属关系;Ascend 及相关名称为华为商标。
+
+**[在线文档站](https://succinctpaul.github.io/ascend-handbook/)** · [快速开始](docs/pages/getting-started.mdx) · [参与贡献](CONTRIBUTING.md)
+
+## ⚡ 快速开始
+
+```bash
+git clone https://github.com/SuccinctPaul/ascend-handbook.git && cd ascend-handbook
+
+# 1) NPU 工具链: CANN 9.0.0 自动下载安装 (无 NPU 机器可跳过, python 基准照常可跑)
+sudo ./scripts/install_npu_toolchain.sh
+
+# 2) 四种 DSL 环境 (python 基准 / ascend_c / triton / tilelang), 结尾输出 OK/FAILED 汇总
+./scripts/install_dsl_envs.sh all
+
+# 3) 跑第一个 kernel
+cd examples/python && uv run python src/gemm.py    # CPU 基准; 四种 NPU 版跑法见 docs 快速开始
+```
+
+完整步骤(含驱动/固件、单 DSL 安装、预期输出)见 [快速开始](docs/pages/getting-started.mdx)。
 
 ## 四种 DSL 目录
 
@@ -12,7 +40,24 @@
 | [`examples/triton_ascend/`](examples/triton_ascend/) | Triton | Python (`@triton.jit`) | 中 (块级) | triton-ascend 后端 + torch_npu | OpenAI Triton 的昇腾后端, `tl.dot`→Cube |
 | [`examples/tilelang_ascend/`](examples/tilelang_ascend/) | TileLang | Python (`@tilelang.jit`) | 中 (偏调度) | tilelang + tilelang-ascend 后端 | 北大开源, 显式 L1/L0C tiling + T.gemm_v0→Cube |
 
-## 实测结果 (Ascend 910B2 + CANN 9.0.0)
+## 算子覆盖 (2026-09-05 实测)
+
+当前 8 个算子 × 4 种 DSL 全部跑通并通过正确性校验(服务器:`vllm-hust-cyj-21rc-cloud-container-86`,Ascend 910B2 + CANN 9.0.0):
+
+| 算子 | python 基准 | triton_ascend | tilelang_ascend | ascend_c | docs |
+|---|---|---|---|---|---|
+| GEMM (`C=A@B`) | ✅ | ✅ 0.79 ms (128³) | ✅ 0.38 ms (128³) | ✅ | [ops/09](docs/pages/ops/09-gemm.md) |
+| Softmax (行归一化) | ✅ | ✅ 9/9 用例 | ✅ (见 docs §8 备注) | ✅ 4/4 用例 | [ops/03](docs/pages/ops/03-softmax.md) |
+| GELU (逐元素激活) | ✅ | ✅ | ✅ | ✅ | [ops/05](docs/pages/ops/05-gelu.md) |
+| RMSNorm (归一化) | ✅ | ✅ 8/8 用例 | ✅ 5/5 用例 | ✅ err=0 (16×512) | [ops/02](docs/pages/ops/02-rmsnorm.md) |
+| RoPE (旋转位置编码) | ✅ | ✅ 7/7 用例 | ✅ 6/6 用例 | ✅ err=0 (16×128) | [ops/04](docs/pages/ops/04-rope.md) |
+| INT8 量化 (per-row absmax) | ✅ | ✅ 6/6 用例 | ✅ 4/4 用例 | ✅ 2/2 规模 | [ops/08](docs/pages/ops/08-quantization.md) |
+| GQA 解码注意力 (KV Cache) | ✅ | ✅ 6/6 用例 | ✅ 4/4 用例 | ✅ 2/2 规模 | [ops/06](docs/pages/ops/06-gqa-kvcache.md) |
+| FlashAttention 前向 (FA2) | ✅ | ✅ 6/6 用例 | ✅ 3/3 用例 | ✅ 2/2 规模 | [ops/07](docs/pages/ops/07-flash-attention.md) |
+
+各算子的实现说明、正确性与性能实测数据见 docs 对应页面的"本仓库实现与实测"章节。
+
+## 实测结果 (Ascend 910B2 + CANN 9.0.0, GEMM 128³)
 
 | DSL | NPU run | max_abs_error | 耗时 (128³ fp16) | 状态 |
 |---|---|---|---|---|
@@ -27,7 +72,9 @@
 ## 统一约定
 
 - **GEMM**:`C = A @ B`,`A∈R^{M×K}`,`B∈R^{K×N}`,`C∈R^{M×N}`(测试规模 M=N=K=128)。
-- **数据精度**:输入/输出 **float16**(Cube 单元原生精度);累加器 **float32**(混合精度,避免溢出)。
+- **RMSNorm**:`y = x / rms(x) · gamma`,`rms = sqrt(mean(x²)+eps)`,eps=1e-6,对最后一维归一化。
+- **RoPE**:交错配对 (interleaved, RoFormer 原版) `pair_a=(x[2a], x[2a+1])`,θ_a=base^(-2a/d),base=10000;cos/sin 表 host 预计算,kernel 查表。
+- **数据精度**:输入/输出 **float16**(Cube/Vector 原生精度);归约/中间量 **float32**(混合精度,"存窄算宽")。
 - **实现层级**:朴素版为主 + 注释/README 讲解优化方向(tiling/Cube/UB/流水线)。
 - **正确性校验**:每个 DSL 的 kernel 输出都与参考基准对齐,`allclose(atol=1e-2, rtol=1e-2)`,打印 PASS/FAIL。
 - **包管理**:每个 Python DSL 目录用 [uv](https://github.com/astral-sh/uv) 独立 venv(`pyproject.toml`)。
@@ -43,11 +90,39 @@ examples/tilelang_ascend/ →  alloc_L1/L0C + T.copy + T.gemm_v0 + T.Scope("C") 
 
 ## 运行环境
 
-远程服务器:`ssh vllm-hust-cyj-21rc-cloud-piou`,开发路径 `/root/Ascend-Notes`。
+远程服务器:`ssh vllm-hust-cyj-21rc-cloud-container-86`,开发路径 `/root/Ascend-Notes`。
 - 架构:aarch64 (Ubuntu)
 - CANN:9.0.0
 - NPU:Ascend910B 系列
 - 所有 NPU kernel 在此服务器上构建与测试;`examples/python/` 基准可在任意机器跑。
+
+### 环境安装脚本(一键复现)
+
+版本锁 = 上文实测组合(torch 2.8.0 + torch_npu 2.8.0rc1 + triton-ascend 3.2.0 +
+tilelang-ascend v0.1.1.010)。目标机:Linux aarch64/x86_64 + Ascend NPU。
+脚本分两层:`scripts/dsl/` 下每种 DSL 一个独立 install/verify 脚本(可单独使用),
+`scripts/install_dsl_envs.sh` 是编排入口(依次转调各 DSL 脚本 + 工具链脚本)。
+
+```bash
+# 0) NPU 工具链: 自动下载安装 CANN toolkit 9.0.0 并验证 (bisheng/acl/npu-smi);
+#    驱动/固件需登录昇腾官方渠道下载后用 --driver/--firmware 传入 (见脚本头部说明)
+sudo ./scripts/install_npu_toolchain.sh
+
+# 1) 四种 DSL 一起装 (编排入口)
+./scripts/install_dsl_envs.sh all                  # 四种全装
+./scripts/install_dsl_envs.sh verify               # 只验证四个环境
+./scripts/install_dsl_envs.sh toolchain            # 转调 NPU 工具链 (可透传参数)
+./scripts/install_dsl_envs.sh all --with-toolchain # 新机器: 先装工具链再装 DSL
+
+# 2) 单独装/验证某一种 DSL (独立场景直接用对应脚本)
+./scripts/dsl/install_python.sh     [install|verify]   # NumPy 基准 (无 NPU 依赖)
+./scripts/dsl/install_ascend_c.sh   [install|verify]   # CANN 原生 C++
+./scripts/dsl/install_triton.sh     [install|verify]   # triton-ascend + torch_npu
+./scripts/dsl/install_tilelang.sh   [install|verify]   # tilelang-ascend + torch_npu
+```
+
+各脚本支持的版本覆盖变量(如 `TORCH_NPU_VERSION`、`TILELANG_WHEEL_URL`、`SKIP_BUILD`)
+见脚本头部注释;手动安装原理与踩坑细节见各 DSL README 的"工具链安装"与"常见问题"章节。
 
 ### 运行前置(每次 shell 都要先 source)
 ```bash
@@ -57,20 +132,29 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 ## 如何逐个运行
 
 ```bash
-# 1. python 基准 (CPU, 任意机器)
-cd examples/python && uv sync && uv run python src/gemm.py
+# 0. python 基准 (CPU, 任意机器; 8 个算子)
+cd examples/python && uv sync && uv run python src/gemm.py src/softmax.py src/gelu.py src/rmsnorm.py src/rope.py src/quant.py src/gqa.py src/flash.py
 
-# 2. ascend_c (需 CANN + NPU)
-cd examples/ascend_c && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j && ./build/ascend_gemm
+# 1. ascend_c (需 CANN + NPU)
+cd examples/ascend_c && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+./build/ascend_gemm            # GEMM
+./build/ascend_softmax 16 512  # Softmax
+./build/ascend_rmsnorm 16 512  # RMSNorm
+./build/ascend_rope 16 128     # RoPE
+./build/ascend_quant 16 512    # INT8 量化 (quant+dequant)
+./build/ascend_gqa 8 2 256 128 # GQA 解码注意力
+./build/ascend_flash 2 64 128 64  # FlashAttention
 
-# 3. triton_ascend (需 torch_npu + triton-ascend, 详见其 README)
-cd examples/triton_ascend && uv run python src/test_gemm.py
+# 2. triton_ascend (需 torch_npu + triton-ascend, 详见其 README)
+cd examples/triton_ascend && ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_gemm.py
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_softmax.py src/test_rmsnorm.py src/test_rope.py src/test_quant.py src/test_gqa.py src/test_flash.py
 
-# 4. tilelang_ascend (需 tilelang + tilelang-ascend, 详见其 README)
-cd examples/tilelang_ascend && uv run python src/test_gemm.py
+# 3. tilelang_ascend (需 tilelang-ascend wheel, 详见其 README)
+cd examples/tilelang_ascend && ACL_OP_INIT_MODE=1 uv run python src/test_gemm.py
+ACL_OP_INIT_MODE=1 uv run python src/test_rmsnorm.py src/test_rope.py src/test_quant.py src/test_gqa.py src/test_flash.py
 ```
 
-每个 DSL 的预期结果均包含 `PASS`。详见各目录 README。
+NPU 用例建议带 `ASCEND_RT_VISIBLE_DEVICES=<空闲卡号>` 指定设备。每个 DSL 的预期结果均包含 `PASS`。详见各目录 README。
 
 ## Docs
 
@@ -91,3 +175,13 @@ node scripts/check-mdx.mjs
 ```
 
 推送 `main` 分支后 GitHub Actions 自动构建并发布到 GitHub Pages（见 `.github/workflows/deploy-docs.yml`）。
+
+## 贡献
+
+欢迎 Issue / PR!新增算子、修正文档、补充实测数据都受欢迎。提交前请读
+[CONTRIBUTING.md](CONTRIBUTING.md) —— 里面有新增算子的标准流程(基准先行、四 DSL 对齐、
+实测数据回填)、文档骨架规范与 MDX 注意事项。
+
+## License
+
+[MIT](LICENSE) © 2026 Paul Cheng。Ascend、CANN 及相关名称为华为商标,本项目与华为无隶属关系。

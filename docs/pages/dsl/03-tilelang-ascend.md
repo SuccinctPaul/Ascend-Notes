@@ -168,6 +168,8 @@ flowchart TB
 
 ### 2. 安装与环境
 
+> 一键安装:`bash scripts/dsl/install_tilelang.sh`(`verify` 仅验证)。下文为手动步骤与原理。
+
 #### 前置:CANN 环境(≥ 8.3.RC1,本机 9.0.0)
 
 ```bash
@@ -185,14 +187,15 @@ cd tilelang_ascend
 uv venv --python 3.11
 uv sync                                          # numpy + torch (PyPI)
 
-# torch_npu (匹配 torch 2.8.0,从昇腾官方获取 cp311 aarch64 wheel)
-uv pip install torch_npu-2.8.0rc1-cp311-cp311-manylinux_2_28_aarch64.whl
+# torch_npu: 必须 pin 2.8.0rc1 与 torch 2.8.0 匹配 (PyPI 直接可解析, 双架构;
+# 不 pin 会被连带解析成 2.12.0 → 与 torch 2.8 符号不匹配)
+uv pip install "torch-npu==2.8.0rc1" --prerelease=allow
 
-# tilelang-ascend 预编译 wheel (本机用 cann900 + aarch64 + cp311)
+# tilelang-ascend 预编译 wheel (cann900 + aarch64; x86_64 用 tilelang-0.1.1.10+linux.cann900 变体)
 uv pip install tilelang-0.1.1.10+ubuntu.20.4.cann900-cp311-cp311-linux_aarch64.whl
 
-# pyyaml (torch_npu 运行时依赖,不在 pyproject 里)
-uv pip install pyyaml
+# torch_npu 运行时依赖 (裸环境必装, 2026-09 新容器实测)
+uv pip install pyyaml decorator attrs psutil scipy
 ```
 
 > **重要**:PyPI 上的 `tilelang` 主包(如 0.1.13)是 **CUDA 版,不含 ascend 后端**。

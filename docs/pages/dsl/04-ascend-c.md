@@ -677,6 +677,8 @@ target_link_libraries(ascend_gemm PRIVATE gemm ascendcl runtime)
 
 #### 3.4.5 从零构建 + 运行(可整段复制)
 
+> 一键环境检查 + 试编译:`bash scripts/dsl/install_ascend_c.sh`(无需 NPU 设备,`verify` 仅验证)。
+
 ```bash
 cd examples/ascend_c
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -1183,12 +1185,12 @@ __gm__ uint32_t* t = reinterpret_cast<__gm__ uint32_t*>(tiling);
 
 ### 本仓库文件引用
 
-- 示例代码 README:[examples/ascend_c/README.md](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/README.md)
-- GEMM kernel 源码:[examples/ascend_c/op_kernel/gemm_kernel.cpp](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/op_kernel/gemm_kernel.cpp)
-- host 驱动源码:[examples/ascend_c/src/gemm_host.cpp](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/src/gemm_host.cpp)
-- 构建脚本:[examples/ascend_c/CMakeLists.txt](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/CMakeLists.txt)
-- 代码风格:[examples/ascend_c/.clang-format](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/.clang-format)
-- 静态检查:[examples/ascend_c/.clang-tidy](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/ascend_c/.clang-tidy)
+- 示例代码 README:[examples/ascend_c/README.md](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/ascend_c/README.md)
+- GEMM kernel 源码:[examples/ascend_c/op_kernel/gemm_kernel.cpp](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/ascend_c/op_kernel/gemm_kernel.cpp)
+- host 驱动源码:[examples/ascend_c/src/gemm_host.cpp](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/ascend_c/src/gemm_host.cpp)
+- 构建脚本:[examples/ascend_c/CMakeLists.txt](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/ascend_c/CMakeLists.txt)
+- 代码风格:[examples/ascend_c/.clang-format](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/ascend_c/.clang-format)
+- 静态检查:[examples/ascend_c/.clang-tidy](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/ascend_c/.clang-tidy)
 - 项目术语表:[术语表](/reference/context)
 - 硬件背景:[01 · AI Core 硬件模型全貌](/hardware/01-ai-core-overview)
 - host/device 生命周期:[03 · host/device 与 kernel 生命周期](/hardware/03-host-device-kernel-lifecycle)

@@ -1,8 +1,8 @@
 # 09 · GEMM（General Matrix Multiply）—— 本仓库的四种 DSL 实证
 
 > 目标读者：已经走完前面 8 篇的创新之旅，想把这套知识落到"一个真实的 GEMM kernel"上。
-> 本文用本仓库 Ascend-Notes 的真实实验数据（4 种 DSL）来讲 GEMM，聚焦矩阵乘复用、tiling、Cube 16×16 MAC。
-> 前置：请先看仓库 [README](https://github.com/SuccinctPaul/Ascend-Notes/blob/main/README.md) 与[术语表](/reference/context)。
+> 本文用本仓库 ascend-handbook 的真实实验数据（4 种 DSL）来讲 GEMM，聚焦矩阵乘复用、tiling、Cube 16×16 MAC。
+> 前置：请先看仓库 [README](https://github.com/SuccinctPaul/ascend-handbook/blob/main/README.md) 与[术语表](/reference/context)。
 
 ---
 
@@ -170,7 +170,7 @@ Cube 的 MAC 阵列是 **16×16×16**：一次做 16×16 个 A×B，硬件一次
 
 ### 6.5 调用链与运行环境（README）
 
-- 所有 NPU kernel 跑在远程 `vllm-hust-cyj-21rc-cloud-piou`（aarch64 Ubuntu，CANN 9.0.0，Ascend910B）；
+- 所有 NPU kernel 跑在远程主测机 `vllm-hust-cyj-21rc-cloud-container-86`（aarch64 Ubuntu，CANN 9.0.0，Ascend910B；早期 GEMM 首跑于 `...-piou` 容器，环境相同）；
 - 每次 shell 先 `source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh`；
 - Ascend C 用 `ascendc.cmake` 自动完成 bisheng 编译 → host stub → 打包，host 端 `aclrtlaunch_gemm_kernel()` 异步启动（**异步提交**），要 `aclrtSynchronizeStream()` 才能安全读结果。
 

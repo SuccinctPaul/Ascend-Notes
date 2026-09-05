@@ -101,6 +101,61 @@ target_link_libraries(ascend_softmax_scalar PRIVATE softmax_scalar softmax ascen
 target_link_libraries(ascend_softmax        PRIVATE softmax_scalar)
 
 # ============================================================================
+# 8. RMSNorm —— 标量规范版 (Σx² fp32 归约 + sqrt + 乘倒数缩放)
+#    kernel: rmsnorm_kernel()  from op_kernel/rmsnorm_kernel.cpp
+#    host:   rmsnorm_host.cpp  -> binary ascend_rmsnorm
+# ============================================================================
+ascendc_library(rmsnorm STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/rmsnorm_kernel.cpp)
+
+add_executable(ascend_rmsnorm src/rmsnorm_host.cpp)
+target_compile_options(ascend_rmsnorm PRIVATE -fno-fast-math)
+target_link_libraries(ascend_rmsnorm PRIVATE rmsnorm ascendcl runtime)
+
+# ============================================================================
+# 9. RoPE —— 交错配对旋转 (查预计算 cos/sin 表, 纯逐元素乘加)
+#    kernel: rope_kernel()  from op_kernel/rope_kernel.cpp
+#    host:   rope_host.cpp  -> binary ascend_rope
+# ============================================================================
+ascendc_library(rope STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/rope_kernel.cpp)
+
+add_executable(ascend_rope src/rope_host.cpp)
+target_compile_options(ascend_rope PRIVATE -fno-fast-math)
+target_link_libraries(ascend_rope PRIVATE rope ascendcl runtime)
+
+# ============================================================================
+# 10. INT8 对称量化 (quant + dequant 双 kernel, per-row absmax scale)
+#     kernels: quant_kernel() / dequant_kernel()  from op_kernel/quant_kernel.cpp
+#     host:    quant_host.cpp -> binary ascend_quant
+# ============================================================================
+ascendc_library(quant STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/quant_kernel.cpp)
+
+add_executable(ascend_quant src/quant_host.cpp)
+target_compile_options(ascend_quant PRIVATE -fno-fast-math)
+target_link_libraries(ascend_quant PRIVATE quant ascendcl runtime)
+
+# ============================================================================
+# 11. GQA 解码注意力 (KV Cache, 标量 3-pass 教学版: 打分 → softmax → 加权)
+#     kernel: gqa_kernel()  from op_kernel/gqa_kernel.cpp
+#     host:   gqa_host.cpp  -> binary ascend_gqa
+# ============================================================================
+ascendc_library(gqa STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/gqa_kernel.cpp)
+
+add_executable(ascend_gqa src/gqa_host.cpp)
+target_compile_options(ascend_gqa PRIVATE -fno-fast-math)
+target_link_libraries(ascend_gqa PRIVATE gqa ascendcl runtime)
+
+# ============================================================================
+# 12. FlashAttention 前向 (逐行 online softmax 教学版: L×S 分数不整体物化)
+#     kernel: flash_kernel()  from op_kernel/flash_kernel.cpp
+#     host:   flash_host.cpp  -> binary ascend_flash
+# ============================================================================
+ascendc_library(flash STATIC ${CMAKE_CURRENT_SOURCE_DIR}/op_kernel/flash_kernel.cpp)
+
+add_executable(ascend_flash src/flash_host.cpp)
+target_compile_options(ascend_flash PRIVATE -fno-fast-math)
+target_link_libraries(ascend_flash PRIVATE flash ascendcl runtime)
+
+# ============================================================================
 # 7. GELU v3 —— 全新命名 target (gelu_v3_kernel / gelu_v3_host) 避免 CANN 9.0
 #    ascendc_library ExternalProject 对旧名字 gelu / gelu_scalar 的二进制打包缓存导致
 #    kernel 源码变更即便 --clean-first 也不会重新 pack 进可执行文件。

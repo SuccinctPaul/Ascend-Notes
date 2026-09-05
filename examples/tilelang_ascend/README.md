@@ -28,6 +28,9 @@ AscendNPU IR / Ascend C,再经 CANN 工具链生成可执行码。
 
 ## 工具链安装
 
+> 一键安装:`bash ../../scripts/dsl/install_tilelang.sh`(默认安装,`verify` 仅验证已装环境)。
+> 以下为手动步骤与原理。
+
 ### 前置:CANN 环境 (本机 CANN 9.0.0, 满足 ≥8.3.RC1 要求)
 ```bash
 source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
@@ -44,26 +47,26 @@ cd tilelang_ascend
 uv venv --python 3.11
 uv sync                                          # numpy + torch (PyPI)
 
-# torch_npu (匹配 torch 2.8.0, 从昇腾官方获取 cp311 aarch64 wheel)
-uv pip install torch_npu-2.8.0rc1-cp311-cp311-manylinux_2_28_aarch64.whl
+# torch_npu: 必须 pin 2.8.0rc1 与 torch 2.8.0 匹配!
+# (2026-09 实测: 不 pin 会被连带解析成 torch-npu 2.12.0, 与 torch 2.8 符号不匹配
+#  → import 报 "undefined symbol: c10::TensorImpl::decref_pyobject")
+uv pip install "torch-npu==2.8.0rc1" --prerelease=allow
 
-# tilelang-ascend 预编译 wheel (本机用 cann900 + aarch64 + cp311)
-# 下载: tilelang-0.1.1.10+ubuntu.20.4.cann900-cp311-cp311-linux_aarch64.whl
-uv pip install tilelang-0.1.1.10+ubuntu.20.4.cann900-cp311-cp311-linux_aarch64.whl
+# tilelang-ascend 预编译 wheel (cann900 + aarch64 + cp311)
+curl -L -o /tmp/tilelang.whl \
+  "https://github.com/tile-ai/tilelang-ascend/releases/download/v0.1.1.010-release/tilelang-0.1.1.10%2Bubuntu.20.4.cann900-cp311-cp311-linux_aarch64.whl"
+# 注意: wheel 文件名不能改 (uv/pip 校验命名规范)
+uv pip install "/tmp/tilelang-0.1.1.10+ubuntu.20.4.cann900-cp311-cp311-linux_aarch64.whl"
 
-# yaml (torch_npu 运行时依赖, 不在 pyproject 里)
-uv pip install pyyaml
+# torch_npu 运行时依赖 (裸环境必装, 2026-09 新容器实测)
+uv pip install pyyaml decorator attrs psutil scipy
 ```
-
-> **注意**: PyPI 上的 `tilelang` 主包(如 0.1.13)是 CUDA 版, **不含 ascend 后端**。
-> 必须装 tilelang-ascend 的预编译 wheel (或源码 `install_ascend.sh`), 它以同名 `tilelang` 包
-> 覆盖安装, 内含编译好的 ascend TVM 后端。
 
 ### 验证安装
 ```bash
 source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
-source .venv/bin/activate
-python -c "import tilelang; print(tilelang.__version__)"
+ACL_OP_INIT_MODE=1 uv run python -c "import torch, torch_npu, tilelang; \
+    print(tilelang.__version__, torch.npu.is_available())"
 ```
 
 ## 编译通路
@@ -107,18 +110,40 @@ NPU Cube 单元执行 (T.gemm_v0 → Cube 16×16 矩阵乘)
 ```bash
 source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 cd tilelang_ascend
-source .venv/bin/activate     # 或: uv run python src/test_gemm.py
-python src/test_gemm.py
+export ACL_OP_INIT_MODE=1            # 必须, 见下节 TVM FFI 冲突
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_gemm.py
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rmsnorm.py
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_rope.py
+ASCEND_RT_VISIBLE_DEVICES=2 uv run python src/test_quant.py src/test_gqa.py src/test_flash.py
 ```
 
-预期输出:
+### RMSNorm / RoPE 性能基准
+
+```bash
+ACL_OP_INIT_MODE=1 ASCEND_RT_VISIBLE_DEVICES=2 \
+  uv run python src/bench_tilelang_ops.py --rows 16,64,256 --dims 512,4096
 ```
-[INFO] === TileLang-Ascend GEMM 测试 (dtype=float16) ===
-[INFO] 预热编译 (首次调用触发 tilelang-ascend 编译)...
-[INFO] TileLang kernel 耗时: 0.3788 ms
-[INFO] 校验结果: PASS (max_abs_error=9.765625e-04, atol=1e-2, rtol=1e-2)
-[INFO] TileLang-Ascend GEMM 测试完成, 全部 PASS
-```
+
+2026-09-05 实测(910B2):RMSNorm 256×4096 = 1.95 ms、RoPE 256×4096 = 10.7 ms。
+注意教学版是 "一个 AI Core 处理一行 + Python 循环逐行调用" —— **每次调用的
+Python/launch 开销主导耗时**, 数据反映的是本教学实现的真实成本, 与 triton 版
+(一次 launch 覆盖全部行) 不直接可比。
+
+## 文件说明
+
+| 文件 | 作用 |
+|---|---|
+| `src/gemm_tilelang.py` | `@tilelang.jit` GEMM kernel (Ascend API: alloc_L1/L0C + T.gemm_v0) + `gemm()` 封装 |
+| `src/softmax_tilelang.py` | 1D 行 softmax 教学 kernel (T.serial 四阶段; 0.1.13 字符串注解风格, 待迁移) |
+| `src/rmsnorm_tilelang.py` | RMSNorm 2D kernel: T.tile.cast/mul + T.reduce_sum + T.tile.rsqrt/broadcast (Vector 内建指令) |
+| `src/rope_tilelang.py` | RoPE 2D kernel: (cid,vid) 双 Vector 核每核一行, T.serial 逐对 fp32 旋转 |
+| `src/quant_tilelang.py` | INT8 量化 2D kernel: T.tile.abs/reduce_max/div + fp16 中转 cast 入 int8 |
+| `src/gqa_tilelang.py` | GQA 解码 2D kernel: 每 program 一头, 逐 s 在线 softmax (原位 max/add) |
+| `src/flash_tilelang.py` | FA 前向 2D kernel: 每 program 一 query 行, 逐 s online m/l/acc 增量 |
+| `src/test_gemm.py` | numpy 参考 + torch_npu 驱动 + allclose 校验 (含 ACL_OP_INIT_MODE 处理) |
+| `src/test_rmsnorm.py` / `src/test_rope.py` / `src/test_quant.py` / `src/test_gqa.py` / `src/test_flash.py` | 多档位正确性测试 (atol=1e-2, rtol=1e-2) |
+| `src/bench_tilelang_ops.py` | RMSNorm/RoPE 微基准 (per-row 循环口径) |
+| `pyproject.toml` | uv 配置 (numpy/torch==2.8.0); torch_npu/tilelang-ascend 手动装 |
 
 ## ⚠️ TVM FFI 冲突与 ACL_OP_INIT_MODE
 
@@ -131,19 +156,18 @@ tilelang-ascend 自带的 TVM 与 CANN 的 `te` 模块**共享 TVM FFI 全局注
 该变量跳过 torch_npu 的 TBE/GE 算子编译器初始化 —— 本测试只做张量分配 + tilelang 自管 kernel launch,
 不走 torch_npu 图编译, 故可安全跳过, 避免冲突。
 
-## 文件说明
-
-| 文件 | 作用 |
-|---|---|
-| `src/gemm_tilelang.py` | `@tilelang.jit` GEMM kernel (Ascend API: alloc_L1/L0C + T.gemm_v0) + `gemm()` 封装 |
-| `src/test_gemm.py` | numpy 参考 + torch_npu 驱动 + allclose 校验 (含 ACL_OP_INIT_MODE 处理) |
-| `pyproject.toml` | uv 配置 (numpy/torch==2.8.0); tilelang-ascend/torch_npu/pyyaml 手动装 |
-
 ## 常见问题
 
 - **`Cannot find global function cce.product_init`**:tilelang 的 TVM 与 CANN 的 te 冲突。设 `ACL_OP_INIT_MODE=1`(见上节)。
 - **`undefined symbol ... IRBuilderFrameNode`**:CANN 的 TVM 先加载, 与 tilelang 的 TVM 不兼容。同样用 `ACL_OP_INIT_MODE=1` 跳过 torch_npu TBE 初始化。
 - **`target ascend_npu not found`**:装了 PyPI 的 CUDA 版 `tilelang` 而非 ascend wheel。卸载后装预编译 cann900 wheel。
 - **`CANN 版本不匹配`**:tilelang-ascend 需 CANN ≥ 8.3.RC1, 本机 9.0.0 满足; wheel 要选匹配的 cannXXX 后缀。
+- **`expected Object but got str` / 注解报错**(0.1.1.10 wheel):`@T.prim_func` 参数注解必须写**直接表达式**
+  `X: T.Tensor((D,), dtype)`(闭包变量在 def 时求值), 不能写 `from __future__ import annotations` 下的
+  字符串前向引用 `"T.Tensor((D,), dtype)"` —— packed_func 只收 Object 不收 str。
+- **`half precision operation is not allowed in aicore function`**:kernel 内 fp16 **标量**算术被禁止
+  (RoPE 踩坑)。 loads 后显式 `.astype("float32")` 做乘加, 存回前再 `.astype("float16")`。
+- **`Unsupported tensor type: numpy.ndarray`**:tilelang-ascend 的 cython adapter 只认 **torch NPU 张量**;
+  封装器负责 numpy ↔ torch 转换 (见 `rmsnorm_tilelang.py` / `rope_tilelang.py`)。
 - **编译慢**:首次 `compile()` 触发完整编译, 后续走缓存 (`~/.tilelang/cache`)。
 - **精度误差大**:确认 `accum_dtype="float"`, block 是 16 的倍数。

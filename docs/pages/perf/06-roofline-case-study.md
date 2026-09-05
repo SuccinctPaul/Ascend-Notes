@@ -88,7 +88,7 @@ I (≈42.7)  <<  I_ridge (≈197)
 
 ## 第 6 步：用实测耗时算实际性能
 
-仓库 README 的实测数据（详见 [05 · 四种 DSL 实测解读](05-dsl-benchmark-analysis.md)，原始数据见仓库 [README](https://github.com/SuccinctPaul/Ascend-Notes/blob/main/README.md)）：
+仓库 README 的实测数据（详见 [05 · 四种 DSL 实测解读](05-dsl-benchmark-analysis.md)，原始数据见仓库 [README](https://github.com/SuccinctPaul/ascend-handbook/blob/main/README.md)）：
 
 | DSL | 耗时 | 实际性能 | 计算 |
 |---|---|---|---|
@@ -214,7 +214,7 @@ flowchart TD
 
 ## 参考资料
 
-1. **本仓库 README**——128³ GEMM 的实测耗时和精度数据来源：[README.md](https://github.com/SuccinctPaul/Ascend-Notes/blob/main/README.md)
+1. **本仓库 README**——128³ GEMM 的实测耗时和精度数据来源：[README.md](https://github.com/SuccinctPaul/ascend-handbook/blob/main/README.md)
 2. **Roofline 经典论文**：Williams et al., *Roofline: An Insightful Visual Performance Model for Multicore Architectures*, CACM 2009：[eScholarship (UC Berkeley)](https://escholarship.org/uc/item/78h8v7mr)
 3. **Ascend 910B 第三方分析**（AI Core 数量、频率、算力估计）：[AI Wiki: Huawei Ascend 910B](https://www.aiwiki.ai/wiki/huawei_ascend_910b/raw)（第三方，非华为官方，待核验）
 4. **昇腾 msProf 官方文档**——Roofline 瓶颈分析图工具用法：[hiascend.cn](https://www.hiascend.cn/document/detail/zh/canncommercial/800/devaids/opdev/optool/atlasopdev_16_00851.html)

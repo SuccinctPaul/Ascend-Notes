@@ -233,7 +233,7 @@ K 维累加精度损失的标准做法。Python 基准同样在乘加前升 fp32
 
 **本仓库（可本地核验）：**
 
-- [README.md](https://github.com/SuccinctPaul/Ascend-Notes)（四 DSL 实测结果表、统一约定、运行环境）
+- [README.md](https://github.com/SuccinctPaul/ascend-handbook)（四 DSL 实测结果表、统一约定、运行环境）
 
 - [术语表](/reference/context)（硬件架构、数据流、tiling、混合精度、Cube 16×16 MAC 术语表）
 

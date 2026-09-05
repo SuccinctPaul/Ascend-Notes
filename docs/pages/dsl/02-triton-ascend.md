@@ -70,6 +70,8 @@ lower 到目标硬件。**triton-ascend**（[gitcode.com/Ascend/triton-ascend](h
 
 #### 1.1 安装：CANN 前置 + torch_npu + triton-ascend
 
+> 一键安装:`bash scripts/dsl/install_triton.sh`(`verify` 仅验证)。下文为手动步骤与原理。
+
 ```bash
 # 1) CANN 环境（前置必备，每次新 shell 都要 source）
 source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
@@ -77,13 +79,16 @@ source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 # 2) 创建 venv 并装 numpy + torch（pyproject.toml 锁定 torch==2.8.0, python>=3.11,<3.12）
 cd triton_ascend && uv venv --python 3.11 && uv sync
 
-# 3) 手动装 torch_npu + triton-ascend（aarch64 + cp311 wheel 在 PyPI 通常可直接解析；
+# 3) 手动装 torch_npu + triton-ascend（aarch64/x86_64 + cp311 wheel 在 PyPI 直接可解析；
 #    若解析不到，从昇腾官方渠道下载 wheel 或源码安装）
-uv pip install torch_npu        # 2.8.0rc1, 必须与 torch 严格一致
+uv pip install "torch-npu==2.8.0rc1" --prerelease=allow   # 必须与 torch 2.8.0 严格一致, 不 pin 会被连带解析成不匹配版本
 uv pip install triton-ascend    # 3.2.0; 失败则源码安装:
 #   git clone https://gitcode.com/Ascend/triton-ascend.git && pip install -e ./triton-ascend
 
-# 4) 验证
+# 4) torch_npu/triton-ascend 运行时依赖（裸环境必装, 2026-09 新容器实测）
+uv pip install pyyaml decorator attrs psutil scipy pybind11
+
+# 5) 验证
 uv run python -c "import torch, torch_npu, triton; print(torch.npu.is_available())"  # → True
 ```
 
@@ -449,11 +454,11 @@ A: CANN 9.0.0 把该 enum 重命名为 `RT_LIMIT_TYPE_SIMT_DVG_WARP_STACK_SIZE`�
 - [昇腾 CANN 官方文档](https://www.hiascend.com/document)
 
 ### 本仓库文件
-- 示例代码：[`examples/triton_ascend/README.md`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend)
-- GEMM kernel：[`examples/triton_ascend/src/gemm_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/gemm_triton.py)
-- GELU kernel：[`examples/triton_ascend/src/gelu_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/gelu_triton.py)
-- Softmax kernel：[`examples/triton_ascend/src/softmax_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/softmax_triton.py)
-- GEMM 正确性测试：[`examples/triton_ascend/src/test_gemm.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/test_gemm.py)
-- GELU 性能基准：[`examples/triton_ascend/src/bench_gelu_triton.py`](https://github.com/SuccinctPaul/Ascend-Notes/tree/main/examples/triton_ascend/src/bench_gelu_triton.py)
+- 示例代码：[`examples/triton_ascend/README.md`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend)
+- GEMM kernel：[`examples/triton_ascend/src/gemm_triton.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/gemm_triton.py)
+- GELU kernel：[`examples/triton_ascend/src/gelu_triton.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/gelu_triton.py)
+- Softmax kernel：[`examples/triton_ascend/src/softmax_triton.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/softmax_triton.py)
+- GEMM 正确性测试：[`examples/triton_ascend/src/test_gemm.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/test_gemm.py)
+- GELU 性能基准：[`examples/triton_ascend/src/bench_gelu_triton.py`](https://github.com/SuccinctPaul/ascend-handbook/tree/main/examples/triton_ascend/src/bench_gelu_triton.py)
 - 术语对齐：[术语表 / 硬件架构](/reference/context)
 - 总览入口：[00 · 四种 DSL 核心手册总览](/dsl/00-dsl-overview)
