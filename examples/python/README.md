@@ -47,7 +47,8 @@
 cd python
 uv sync                 # 安装依赖 (numpy, termcolor, pytest)
 uv run python src/gemm.py src/softmax.py src/gelu.py src/rmsnorm.py src/rope.py src/quant.py src/gqa.py src/flash.py
-uv run pytest src/test_rmsnorm.py src/test_rope.py -v   # 完整 pytest
+uv run pytest src/test_softmax.py src/test_gelu.py src/test_rmsnorm.py \
+    src/test_rope.py src/test_quant.py src/test_gqa.py src/test_flash.py -v  # 完整 pytest
 ```
 
 ## 与其他 DSL 的关系

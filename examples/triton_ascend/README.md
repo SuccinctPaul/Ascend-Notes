@@ -35,11 +35,15 @@ cd triton_ascend
 uv venv --python 3.11          # 创建独立 venv
 uv sync                         # 安装 numpy, torch==2.8.0 (PyPI 可解析部分)
 
-# 手动安装 (需匹配 CANN 9.0.0, 从昇腾官方获取对应 wheel):
-uv pip install torch_npu        # torch_npu 2.8.0rc1 (cp311 aarch64, 匹配 torch 2.8.0)
+# torch_npu: 必须 pin 2.8.0rc1 与 torch 2.8.0 匹配!
+# (2026-09 实测: 不 pin 可能被解析到不匹配版本, import 报 undefined symbol)
+uv pip install "torch-npu==2.8.0rc1" --prerelease=allow
 uv pip install triton-ascend    # triton-ascend 3.2.0; 失败则源码:
 #   git clone https://gitcode.com/Ascend/triton-ascend.git
 #   cd triton-ascend && pip install -e .
+
+# torch_npu/triton-ascend 的运行时依赖 (裸环境必装, 2026-09 新容器实测):
+uv pip install pyyaml decorator attrs psutil scipy pybind11
 ```
 
 > **版本匹配很关键**(本机实测组合):
@@ -49,6 +53,7 @@ uv pip install triton-ascend    # triton-ascend 3.2.0; 失败则源码:
 
 ### 验证安装
 ```bash
+source /usr/local/Ascend/ascend-toolkit/latest/set_env.sh
 uv run python -c "import torch, torch_npu, triton; print(torch.npu.is_available())"
 ```
 
